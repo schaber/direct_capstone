@@ -7,6 +7,20 @@ from sklearn.linear_model import LogisticRegression, Lasso, LinearRegression, SG
 from sklearn import model_selection
 import pubchempy as pcp
 
+# SMILES Helper Functions
+def get_smiles_dicts(smiles):
+    i = 0
+    char_dict, ord_dict = {'^':i}, {i:'^'}
+    for smile in smiles:
+        for c in smile:
+            if c not in char_dict.keys():
+                i += 1
+                char_dict[c] = i
+                ord_dict[i] = c
+    char_dict['_'] = i+1
+    ord_dict[i+1] = '_'
+    return char_dict, ord_dict
+
 ### KDE Funcs
 def calc_kde(xis, lo, hi, h=0.17):
     kde = []
@@ -136,6 +150,7 @@ def run_pca(pl_sets, other_sets, n_components=2, scaling_factor=0.2):
 
     return [pl_ics_tr, pl_ics_te], [oth_ics_tr, oth_ics_te], pca, scaler
 
+# Polarity parameter calculations
 def calc_num_polar(row):
     num_polar = 0
     polar_groups = ['fr_C_O', 'fr_Al_OH', 'fr_phos_acid', 'fr_para_hydroxylation', \
