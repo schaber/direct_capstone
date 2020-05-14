@@ -98,7 +98,7 @@ class PlastVAEGen():
         self.current_state['latent_size'] = self.latent_size
         self.best_state['latent_size'] = self.latent_size
 
-    def train(self, save_last=True, save_best=True):
+    def train(self, save_last=True, save_best=True, log=True):
         """
         Function to train model with loaded data
         """
@@ -155,6 +155,12 @@ class PlastVAEGen():
         else:
             pass
 
+        # Set up logger
+        if log:
+            log_file = open('log.txt', 'a')
+            log_file.write('epoch,batch_idx,data_type,tot_loss,bce_loss,kld_loss\n')
+            log_file.close()
+
         # Epoch Looper
         for epoch in range(epochs):
             if self.verbose:
@@ -166,24 +172,21 @@ class PlastVAEGen():
             self.network.train()
             losses = []
             for batch_idx, data in enumerate(train_loader):
-                # if self.verbose:
-                #     if batch_idx % 10 == 0:
-                #         n_hash = int(batch_idx*self.batch_size / n_samples * 50)+1
-                #         progress_bar = '['+'#'*n_hash+'-'*(50-n_hash)+']'
-                #         sys.stdout.write("\r\033[K"+epoch_counter+' '+progress_bar)
-                # if batch_idx % 10 == 0:
-                #     print('Train - {}%'.format(round(batch_idx / len(train_loader) * 100, 2)))
                 if use_gpu:
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss = vae_loss(x, x_decode, mu, logvar)
+                loss, bce, kld = vae_loss(x, x_decode, mu, logvar)
                 loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
                 losses.append(loss.item())
+                if log:
+                    log_file = open('log.txt', 'a')
+                    log_file.write('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'train',loss.item(),bce.item(),kld.item()))
+                    log_file.close()
 
             train_loss = np.mean(losses)
             self.history['train_loss'].append(train_loss)
@@ -193,15 +196,17 @@ class PlastVAEGen():
             self.network.eval()
             losses = []
             for batch_idx, data in enumerate(val_loader):
-                # if batch_idx % 10 == 0:
-                #     print('Val - {}%'.format(round(batch_idx / len(val_loader) * 100, 2)))
                 if use_gpu:
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss = vae_loss(x, x_decode, mu, logvar)
+                loss, bce, kld = vae_loss(x, x_decode, mu, logvar)
                 losses.append(loss.item())
+                if log:
+                    log_file = open('log.txt', 'a')
+                    log_file.write('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'test',loss.item(),bce.item(),kld.item()))
+                    log_file.close()
             val_loss = np.mean(losses)
             self.history['val_loss'].append(val_loss)
             print('Epoch - {}  Train Loss - {}  Val Loss - {}'.format(epoch,

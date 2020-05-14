@@ -5,7 +5,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression, Lasso, LinearRegression, SGDClassifier
 from sklearn import model_selection
-import pubchempy as pcp
+# import pubchempy as pcp
 
 # SMILES Helper Functions
 def get_smiles_vocab(smiles, start_char=False):

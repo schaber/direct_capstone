@@ -14,15 +14,15 @@ class TimeDistributed(nn.Module):
             return self.module(x)
 
         # Squash samples and timesteps into a single axis
-        x_reshape = x.contiguous().view(-1, x.size(-1)).cuda()  # (samples * timesteps, input_size)
+        x_reshape = x.contiguous().view(-1, x.size(-1)) # (samples * timesteps, input_size)
 
         y = self.module(x_reshape)
 
         # We have to reshape Y
         if self.batch_first:
-            y = y.contiguous().view(x.size(0), -1, y.size(-1)).cuda()  # (samples, timesteps, output_size)
+            y = y.contiguous().view(x.size(0), -1, y.size(-1))  # (samples, timesteps, output_size)
         else:
-            y = y.view(-1, x.size(1), y.size(-1)).cuda()  # (timesteps, samples, output_size)
+            y = y.view(-1, x.size(1), y.size(-1))  # (timesteps, samples, output_size)
 
         return y
 
@@ -36,10 +36,11 @@ class ConvEncoder(nn.Module):
                  fc_width=196):
         super().__init__()
 
-        self.fc_width = fc_width
+        final_dense_width = (input_shape[-1] - (filter_sizes[0] - 1) - (filter_sizes[1] - 1) - (filter_sizes[2] - 1)) * channels[-1]
         self.conv1 = nn.Conv1d(input_shape[0], channels[0], filter_sizes[0])
         self.conv2 = nn.Conv1d(channels[0], channels[1], filter_sizes[1])
         self.conv3 = nn.Conv1d(channels[1], channels[2], filter_sizes[2])
+        self.dense = nn.Linear(final_dense_width, fc_width)
         self.z_means = nn.Linear(fc_width, latent_size)
         self.z_vars = nn.Linear(fc_width, latent_size)
 
@@ -50,8 +51,8 @@ class ConvEncoder(nn.Module):
         x = F.relu(x)
         x = self.conv3(x)
         x = F.relu(x)
-        x = x.contiguous().view(x.size(0), -1).cuda()
-        x = nn.Linear(x.shape[1], self.fc_width)(x)
+        x = x.contiguous().view(x.size(0), -1)
+        x = self.dense(x)
         x = F.relu(x)
         mu, logvar = self.z_means(x), self.z_vars(x)
         return mu, logvar
@@ -82,11 +83,11 @@ class GRUDecoder(nn.Module):
     def forward(self, x):
         x = self.latent_input(x)
         x = F.relu(x)
-        x = x.unsqueeze(0).repeat(self.repeat, 1, 1).cuda()
+        x = x.unsqueeze(0).repeat(self.repeat, 1, 1)
         x, h_n = self.gru(x)
         x = self.decode(x)
         x = F.softmax(x, dim=2)
-        x = x.permute(1, 2, 0).cuda()
+        x = x.permute(1, 2, 0)
         return x
 
 class GenerativeVAE(nn.Module):
