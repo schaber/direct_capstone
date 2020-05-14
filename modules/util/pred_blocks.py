@@ -14,15 +14,15 @@ class TimeDistributed(nn.Module):
             return self.module(x)
 
         # Squash samples and timesteps into a single axis
-        x_reshape = x.contiguous().view(-1, x.size(-1))  # (samples * timesteps, input_size)
+        x_reshape = x.contiguous().view(-1, x.size(-1)).cuda()  # (samples * timesteps, input_size)
 
         y = self.module(x_reshape)
 
         # We have to reshape Y
         if self.batch_first:
-            y = y.contiguous().view(x.size(0), -1, y.size(-1))  # (samples, timesteps, output_size)
+            y = y.contiguous().view(x.size(0), -1, y.size(-1)).cuda()  # (samples, timesteps, output_size)
         else:
-            y = y.view(-1, x.size(1), y.size(-1))  # (timesteps, samples, output_size)
+            y = y.view(-1, x.size(1), y.size(-1)).cuda()  # (timesteps, samples, output_size)
 
         return y
 
@@ -50,7 +50,7 @@ class ConvEncoder(nn.Module):
         x = F.relu(x)
         x = self.conv3(x)
         x = F.relu(x)
-        x = x.contiguous().view(x.size(0), -1)
+        x = x.contiguous().view(x.size(0), -1).cuda()
         x = nn.Linear(x.shape[1], self.fc_width)(x)
         x = F.relu(x)
         mu, logvar = self.z_means(x), self.z_vars(x)
@@ -82,11 +82,11 @@ class GRUDecoder(nn.Module):
     def forward(self, x):
         x = self.latent_input(x)
         x = F.relu(x)
-        x = x.unsqueeze(0).repeat(self.repeat, 1, 1)
+        x = x.unsqueeze(0).repeat(self.repeat, 1, 1).cuda()
         x, h_n = self.gru(x)
         x = self.decode(x)
         x = F.softmax(x, dim=2)
-        x = x.permute(1, 2, 0)
+        x = x.permute(1, 2, 0).cuda()
         return x
 
 class GenerativeVAE(nn.Module):
