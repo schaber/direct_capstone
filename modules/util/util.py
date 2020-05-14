@@ -8,9 +8,13 @@ from sklearn import model_selection
 import pubchempy as pcp
 
 # SMILES Helper Functions
-def get_smiles_dicts(smiles):
-    i = 0
-    char_dict, ord_dict = {'^':i}, {i:'^'}
+def get_smiles_vocab(smiles, start_char=False):
+    if start_char:
+        i = 0
+        char_dict, ord_dict = {'^':i}, {i:'^'}
+    else:
+        i = -1
+        char_dict, ord_dict = {}, {}
     for smile in smiles:
         for c in smile:
             if c not in char_dict.keys():
@@ -20,6 +24,29 @@ def get_smiles_dicts(smiles):
     char_dict['_'] = i+1
     ord_dict[i+1] = '_'
     return char_dict, ord_dict
+
+def encode_smiles(smile, max_len, char_dict, one_hot=True):
+    smile += '_'*(max_len - len(smile))
+    smile_vec = [char_dict[c] for c in smile]
+    if one_hot:
+        encoded_smile = np.zeros((len(char_dict), max_len))
+        for t, idx in enumerate(smile_vec):
+            encoded_smile[idx, t] = 1
+        return encoded_smile
+    else:
+        return smile_vec
+
+def sample_distribution(a, temp=1.0):
+    a = np.log(a) / temp
+    dist = np.exp(a)/np.sum(np.exp(a))
+    return np.random.choice(range(len(a)), p=dist)
+
+def decode_smiles(one_hot_mat, ord_dict):
+    smile = ''
+    for i in range(one_hot_mat.shape[1]):
+        smile += ord_dict[sample_distribution(one_hot_mat[:,i])]
+    return smile
+
 
 ### KDE Funcs
 def calc_kde(xis, lo, hi, h=0.17):
