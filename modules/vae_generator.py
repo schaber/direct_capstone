@@ -37,7 +37,7 @@ class PlastVAEGen():
                            'input_shape': None,
                            'latent_size': None,
                            'history': self.history}
-        self.loaded = False
+        self.trained = False
 
     def save(self, state, fn, path='checkpoints'):
         os.makedirs(path, exist_ok=True)
@@ -55,7 +55,7 @@ class PlastVAEGen():
         self.best_loss = self.current_state['best_loss']
         self.network = GenerativeVAE(self.current_state['input_shape'], self.current_state['latent_size'])
         self.network.load_state_dict(self.current_state['model_state_dict'])
-        self.loaded = True
+        self.trained = True
 
     def initiate(self, data):
         """
@@ -86,7 +86,7 @@ class PlastVAEGen():
         self.input_shape = (self.num_char, self.max_length)
 
         # Build network
-        if self.loaded:
+        if self.trained:
             assert self.input_shape == self.current_state['input_shape'], "ERROR - Shape of data different than that used to train loaded model"
             assert self.latent_size == self.current_state['latent_size'], "ERROR - Latent space of trained model unequal to input parameter"
         else:
@@ -114,7 +114,7 @@ class PlastVAEGen():
         if 'LEARNING_RATE' in self.params.keys():
             self.lr = self.params['LEARNING_RATE']
         else:
-            self.lr = 1e-4
+            self.lr = 0.01
         if 'N_EPOCHS' in self.params.keys():
             epochs = self.params['N_EPOCHS']
         else:
@@ -149,11 +149,12 @@ class PlastVAEGen():
                                                  num_workers=0,
                                                  pin_memory=False)
 
-        self.optimizer = optim.Adam(self.network.parameters(), lr=self.lr)
-        if self.loaded:
+
+        if self.trained:
+            self.optimizer = optim.Adam(self.network.parameters(), lr=self.lr)
             self.optimizer.load_state_dict(self.current_state['optimizer_state_dict'])
         else:
-            pass
+            self.optimizer = optim.Adam(self.network.parameters(), lr=self.lr)
 
         # Set up logger
         if log:
@@ -187,6 +188,7 @@ class PlastVAEGen():
                     log_file = open('log.txt', 'a')
                     log_file.write('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'train',loss.item(),bce.item(),kld.item()))
                     log_file.close()
+                # print('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'train',loss.item(),bce.item(),kld.item()))
 
             train_loss = np.mean(losses)
             self.history['train_loss'].append(train_loss)
@@ -207,9 +209,10 @@ class PlastVAEGen():
                     log_file = open('log.txt', 'a')
                     log_file.write('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'test',loss.item(),bce.item(),kld.item()))
                     log_file.close()
+                # print('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'test',loss.item(),bce.item(),kld.item()))
             val_loss = np.mean(losses)
             self.history['val_loss'].append(val_loss)
-            print('Epoch - {}  Train Loss - {}  Val Loss - {}'.format(epoch,
+            print('Epoch - {}  Train Loss - {}  Val Loss - {}'.format(self.n_epochs,
                                                                       round(train_loss, 2),
                                                                       round(val_loss, 2)))
 

@@ -86,8 +86,8 @@ class GRUDecoder(nn.Module):
         x = x.unsqueeze(0).repeat(self.repeat, 1, 1)
         x, h_n = self.gru(x)
         x = self.decode(x)
-        x = F.softmax(x, dim=2)
         x = x.permute(1, 2, 0)
+        x = F.softmax(x, dim=1)
         return x
 
 class GenerativeVAE(nn.Module):
