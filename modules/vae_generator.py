@@ -72,6 +72,10 @@ class PlastVAEGen():
             self.max_length = self.params['MAX_LENGTH']
         else:
             self.max_length = int(self.data_length * 1.5)
+        if 'TRAIN_SPLIT' in self.params.keys():
+            self.train_split = self.params['TRAIN_SPLIT']
+        else:
+            self.train_split = 0.8
 
         # One-hot encoding smiles below the max length
         self.usable_data = [(ll, sm) for ll, sm in zip(self.all_lls, self.all_smiles) if len(sm) < self.max_length]
@@ -84,6 +88,19 @@ class PlastVAEGen():
         for i, sm in enumerate(self.usable_smiles):
             self.encoded[i,:,:] = torch.tensor(uu.encode_smiles(sm, self.max_length, self.char_dict))
         self.input_shape = (self.num_char, self.max_length)
+
+        # Data preparation
+        self.n_samples = self.encoded.shape[0]
+        self.n_train = int(self.n_samples * self.train_split)
+        self.n_test = self.n_samples - self.n_train
+        rand_idxs = np.random.choice(np.arange(self.n_samples), size=self.n_samples)
+        train_idxs = rand_idxs[:self.n_train]
+        val_idxs = rand_idxs[self.n_train:]
+
+        self.X_train = self.encoded[train_idxs,:,:]
+        self.X_val = self.encoded[val_idxs,:,:]
+        self.y_train = self.usable_lls[train_idxs]
+        self.y_val = self.usable_lls[val_idxs]
 
         # Build network
         if self.trained:
@@ -107,14 +124,10 @@ class PlastVAEGen():
             self.batch_size = self.params['BATCH_SIZE']
         else:
             self.batch_size = 10
-        if 'TRAIN_SPLIT' in self.params.keys():
-            self.train_split = self.params['TRAIN_SPLIT']
-        else:
-            self.train_split = 0.8
         if 'LEARNING_RATE' in self.params.keys():
             self.lr = self.params['LEARNING_RATE']
         else:
-            self.lr = 0.01
+            self.lr = 1e-4
         if 'N_EPOCHS' in self.params.keys():
             epochs = self.params['N_EPOCHS']
         else:
@@ -124,26 +137,13 @@ class PlastVAEGen():
         if use_gpu:
             self.network.cuda()
 
-        # Split into test and train sets
-        n_samples = self.encoded.shape[0]
-        n_train = int(n_samples * self.train_split)
-        n_test = n_samples - n_train
-        rand_idxs = np.random.choice(np.arange(n_samples), size=n_samples)
-        train_idxs = rand_idxs[:n_train]
-        val_idxs = rand_idxs[n_train:]
-
-        X_train = self.encoded[train_idxs,:,:]
-        X_val = self.encoded[val_idxs,:,:]
-        y_train = self.usable_lls[train_idxs]
-        y_val = self.usable_lls[val_idxs]
-
         # Create data iterables
-        train_loader = torch.utils.data.DataLoader(X_train,
+        train_loader = torch.utils.data.DataLoader(self.X_train,
                                                    batch_size=self.batch_size,
                                                    shuffle=True,
                                                    num_workers=0,
                                                    pin_memory=False)
-        val_loader = torch.utils.data.DataLoader(X_val,
+        val_loader = torch.utils.data.DataLoader(self.X_val,
                                                  batch_size=self.batch_size,
                                                  shuffle=True,
                                                  num_workers=0,
@@ -178,7 +178,7 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss, bce, kld = vae_loss(x, x_decode, mu, logvar)
+                loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.max_length)
                 loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
@@ -203,7 +203,7 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss, bce, kld = vae_loss(x, x_decode, mu, logvar)
+                loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.max_length)
                 losses.append(loss.item())
                 if log:
                     log_file = open('log.txt', 'a')
