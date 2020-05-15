@@ -44,7 +44,7 @@ def sample_distribution(a, temp=1.0):
 def decode_smiles(one_hot_mat, ord_dict):
     smile = ''
     for i in range(one_hot_mat.shape[1]):
-        smile += ord_dict[sample_distribution(one_hot_mat[:,i])]
+        smile += ord_dict[sample_distribution(one_hot_mat[:,i], temp=0.5)]
     return smile
 
 

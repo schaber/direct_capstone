@@ -29,14 +29,16 @@ class PlastVAEGen():
                               'best_loss': self.best_loss,
                               'input_shape': None,
                               'latent_size': None,
-                              'history': self.history}
+                              'history': self.history,
+                              'params': self.params}
         self.best_state = {'epoch': self.n_epochs,
                            'model_state_dict': None,
                            'optimizer_state_dict': None,
                            'best_loss': self.best_loss,
                            'input_shape': None,
                            'latent_size': None,
-                           'history': self.history}
+                           'history': self.history,
+                           'params': self.params}
         self.trained = False
 
     def save(self, state, fn, path='checkpoints'):
@@ -53,6 +55,7 @@ class PlastVAEGen():
         self.history = self.current_state['history']
         self.n_epochs = self.current_state['epoch']
         self.best_loss = self.current_state['best_loss']
+        self.params = self.current_state['params']
         self.network = GenerativeVAE(self.current_state['input_shape'], self.current_state['latent_size'])
         self.network.load_state_dict(self.current_state['model_state_dict'])
         self.trained = True
@@ -67,35 +70,31 @@ class PlastVAEGen():
         # Setting up parameters
         self.all_smiles = data[:,0]
         self.all_lls = data[:,1]
-        self.data_length = max(map(len, data[:,0]))
-        if 'MAX_LENGTH' in self.params.keys():
-            self.max_length = self.params['MAX_LENGTH']
-        else:
-            self.max_length = int(self.data_length * 1.5)
-        if 'TRAIN_SPLIT' in self.params.keys():
-            self.train_split = self.params['TRAIN_SPLIT']
-        else:
-            self.train_split = 0.8
+        self.params['DATA_LENGTH'] = max(map(len, data[:,0]))
+        if 'MAX_LENGTH' not in self.params.keys():
+            self.params['MAX_LENGTH'] = int(self.params['DATA_LENGTH'] * 1.5)
+        if 'TRAIN_SPLIT' not in self.params.keys():
+            self.params['TRAIN_SPLIT'] = 0.8
 
         # One-hot encoding smiles below the max length
-        self.usable_data = [(ll, sm) for ll, sm in zip(self.all_lls, self.all_smiles) if len(sm) < self.max_length]
+        self.usable_data = [(ll, sm) for ll, sm in zip(self.all_lls, self.all_smiles) if len(sm) < self.params['MAX_LENGTH']]
         self.usable_lls = np.array([x[0] for x in self.usable_data])
         self.usable_smiles = [x[1] for x in self.usable_data]
-        self.char_dict, self.ord_dict = uu.get_smiles_vocab(self.usable_smiles)
-        self.num_char = len(self.char_dict)
-        self.pad_num = self.char_dict['_']
-        self.encoded = torch.empty((len(self.usable_smiles), self.num_char, self.max_length))
+        self.params['CHAR_DICT'], self.params['ORD_DICT'] = uu.get_smiles_vocab(self.usable_smiles)
+        self.params['NUM_CHAR'] = len(self.params['CHAR_DICT'])
+        self.params['PAD_NUM'] = self.params['CHAR_DICT']['_']
+        self.encoded = torch.empty((len(self.usable_smiles), self.params['NUM_CHAR'], self.params['MAX_LENGTH']))
         for i, sm in enumerate(self.usable_smiles):
-            self.encoded[i,:,:] = torch.tensor(uu.encode_smiles(sm, self.max_length, self.char_dict))
-        self.input_shape = (self.num_char, self.max_length)
+            self.encoded[i,:,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT']))
+        self.input_shape = (self.params['NUM_CHAR'], self.params['MAX_LENGTH'])
 
         # Data preparation
-        self.n_samples = self.encoded.shape[0]
-        self.n_train = int(self.n_samples * self.train_split)
-        self.n_test = self.n_samples - self.n_train
-        rand_idxs = np.random.choice(np.arange(self.n_samples), size=self.n_samples)
-        train_idxs = rand_idxs[:self.n_train]
-        val_idxs = rand_idxs[self.n_train:]
+        self.params['N_SAMPLES'] = self.encoded.shape[0]
+        self.params['N_TRAIN'] = int(self.params['N_SAMPLES'] * self.params['TRAIN_SPLIT'])
+        self.params['N_TEST'] = self.params['N_SAMPLES'] - self.params['N_TRAIN']
+        rand_idxs = np.random.choice(np.arange(self.params['N_SAMPLES']), size=self.params['N_SAMPLES'])
+        train_idxs = rand_idxs[:self.params['N_TRAIN']]
+        val_idxs = rand_idxs[self.params['N_TRAIN']:]
 
         self.X_train = self.encoded[train_idxs,:,:]
         self.X_val = self.encoded[val_idxs,:,:]
@@ -123,7 +122,7 @@ class PlastVAEGen():
         if 'BATCH_SIZE' in self.params.keys():
             self.batch_size = self.params['BATCH_SIZE']
         else:
-            self.batch_size = 10
+            self.batch_size = 100
         if 'LEARNING_RATE' in self.params.keys():
             self.lr = self.params['LEARNING_RATE']
         else:
@@ -136,6 +135,12 @@ class PlastVAEGen():
         use_gpu = torch.cuda.is_available()
         if use_gpu:
             self.network.cuda()
+
+        # Save constant params to state dicts
+        if save_best:
+            self.best_state['params'] = self.params
+        if save_last:
+            self.current_state['params'] = self.params
 
         # Create data iterables
         train_loader = torch.utils.data.DataLoader(self.X_train,
@@ -178,7 +183,7 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.max_length)
+                loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
                 loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
@@ -203,7 +208,7 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.max_length)
+                loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
                 losses.append(loss.item())
                 if log:
                     log_file = open('log.txt', 'a')
@@ -234,6 +239,7 @@ class PlastVAEGen():
         if save_last:
             self.save(self.current_state, 'latest.ckpt')
             self.save(self.best_state, 'best.ckpt')
+        self.trained = True
 
     def predict(self, data):
         """

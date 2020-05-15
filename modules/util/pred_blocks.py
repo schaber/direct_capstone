@@ -33,7 +33,7 @@ class ConvEncoder(nn.Module):
                  conv_layers=3,
                  filter_sizes=[9,9,10],
                  channels=[9,9,11],
-                 fc_width=196):
+                 fc_width=584):
         super().__init__()
 
         final_dense_width = (input_shape[-1] - (filter_sizes[0] - 1) - (filter_sizes[1] - 1) - (filter_sizes[2] - 1)) * channels[-1]
@@ -76,12 +76,10 @@ class GRUDecoder(nn.Module):
         super().__init__()
 
         self.repeat = input_shape[1]
-        self.latent_input = nn.Linear(latent_size, latent_size)
         self.gru = nn.GRU(latent_size, gru_size, gru_layers)
         self.decode = TimeDistributed(nn.Linear(gru_size, input_shape[0]))
 
     def forward(self, x):
-        x = self.latent_input(x)
         x = F.relu(x)
         x = x.unsqueeze(0).repeat(self.repeat, 1, 1)
         x, h_n = self.gru(x)
