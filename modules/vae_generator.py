@@ -1,7 +1,10 @@
 import os
 import sys
+import shutil
+import imageio
 import numpy as np
 import torch
+import torch.utils.data
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
@@ -10,7 +13,7 @@ from util.pred_blocks import GenerativeVAE
 from util.losses import vae_loss
 
 class PlastVAEGen():
-    def __init__(self, params, verbose=False):
+    def __init__(self, params={}, verbose=False):
         self.verbose = verbose
         self.params = {}
         for p, v in params.items():
@@ -18,7 +21,7 @@ class PlastVAEGen():
         if 'LATENT_SIZE' in self.params.keys():
             self.latent_size = self.params['LATENT_SIZE']
         else:
-            self.latent_size = 292
+            self.latent_size = 512
         self.history = {'train_loss': [],
                         'val_loss': []}
         self.best_loss = np.inf
@@ -92,14 +95,14 @@ class PlastVAEGen():
         self.params['N_SAMPLES'] = self.encoded.shape[0]
         self.params['N_TRAIN'] = int(self.params['N_SAMPLES'] * self.params['TRAIN_SPLIT'])
         self.params['N_TEST'] = self.params['N_SAMPLES'] - self.params['N_TRAIN']
-        rand_idxs = np.random.choice(np.arange(self.params['N_SAMPLES']), size=self.params['N_SAMPLES'])
-        train_idxs = rand_idxs[:self.params['N_TRAIN']]
-        val_idxs = rand_idxs[self.params['N_TRAIN']:]
+        self.rand_idxs = np.random.choice(np.arange(self.params['N_SAMPLES']), size=self.params['N_SAMPLES'])
+        self.params['TRAIN_IDXS'] = self.rand_idxs[:self.params['N_TRAIN']]
+        self.params['VAL_IDXS'] = self.rand_idxs[self.params['N_TRAIN']:]
 
-        self.X_train = self.encoded[train_idxs,:,:]
-        self.X_val = self.encoded[val_idxs,:,:]
-        self.y_train = self.usable_lls[train_idxs]
-        self.y_val = self.usable_lls[val_idxs]
+        self.X_train = self.encoded[self.params['TRAIN_IDXS'],:,:]
+        self.X_val = self.encoded[self.params['VAL_IDXS'],:,:]
+        self.y_train = self.usable_lls[self.params['TRAIN_IDXS']]
+        self.y_val = self.usable_lls[self.params['VAL_IDXS']]
 
         # Build network
         if self.trained:
@@ -114,7 +117,32 @@ class PlastVAEGen():
         self.current_state['latent_size'] = self.latent_size
         self.best_state['latent_size'] = self.latent_size
 
-    def train(self, save_last=True, save_best=True, log=True):
+    def trained_initiate(self, data):
+        """
+        Function analogous to `self.initiate` except some parameters do not need to be
+        re-initialized because model has already been trained for some number of
+        epochs (you must use the same data that model was initially trained on)
+        """
+        # Setting up parameters
+        self.all_smiles = data[:,0]
+        self.all_lls = data[:,1]
+
+        # One-hot encoding smiles below the max length
+        self.usable_data = [(ll, sm) for ll, sm in zip(self.all_lls, self.all_smiles) if len(sm) < self.params['MAX_LENGTH']]
+        self.usable_lls = np.array([x[0] for x in self.usable_data])
+        self.usable_smiles = [x[1] for x in self.usable_data]
+        self.encoded = torch.empty((len(self.usable_smiles), self.params['NUM_CHAR'], self.params['MAX_LENGTH']))
+        for i, sm in enumerate(self.usable_smiles):
+            self.encoded[i,:,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT']))
+        self.input_shape = (self.params['NUM_CHAR'], self.params['MAX_LENGTH'])
+
+        # Data preparation
+        self.X_train = self.encoded[self.params['TRAIN_IDXS'],:,:]
+        self.X_val = self.encoded[self.params['VAL_IDXS'],:,:]
+        self.y_train = self.usable_lls[self.params['TRAIN_IDXS']]
+        self.y_val = self.usable_lls[self.params['VAL_IDXS']]
+
+    def train(self, data, save_last=True, save_best=True, log=True, make_grad_gif=False):
         """
         Function to train model with loaded data
         """
@@ -122,7 +150,7 @@ class PlastVAEGen():
         if 'BATCH_SIZE' in self.params.keys():
             self.batch_size = self.params['BATCH_SIZE']
         else:
-            self.batch_size = 100
+            self.batch_size = 1000
         if 'LEARNING_RATE' in self.params.keys():
             self.lr = self.params['LEARNING_RATE']
         else:
@@ -131,10 +159,20 @@ class PlastVAEGen():
             epochs = self.params['N_EPOCHS']
         else:
             epochs = 100
+
+        if not self.trained:
+            self.initiate(data)
+        elif self.trained:
+            self.trained_initiate(data)
+
         torch.backends.cudnn.benchmark = True
         use_gpu = torch.cuda.is_available()
         if use_gpu:
             self.network.cuda()
+        if make_grad_gif:
+            os.mkdir('gif')
+            images = []
+            frame = 0
 
         # Save constant params to state dicts
         if save_best:
@@ -147,12 +185,14 @@ class PlastVAEGen():
                                                    batch_size=self.batch_size,
                                                    shuffle=True,
                                                    num_workers=0,
-                                                   pin_memory=False)
+                                                   pin_memory=False,
+                                                   drop_last=True)
         val_loader = torch.utils.data.DataLoader(self.X_val,
                                                  batch_size=self.batch_size,
                                                  shuffle=True,
                                                  num_workers=0,
-                                                 pin_memory=False)
+                                                 pin_memory=False,
+                                                 drop_last=True)
 
 
         if self.trained:
@@ -176,17 +216,32 @@ class PlastVAEGen():
 
             # Train Loop
             self.network.train()
+            h = self.network.decoder.init_hidden(self.params['BATCH_SIZE']).data
             losses = []
             for batch_idx, data in enumerate(train_loader):
+                self.network.zero_grad()
                 if use_gpu:
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
-                x_decode, mu, logvar = self.network(x)
+                x_decode, mu, logvar, h = self.network(x, h.data)
                 loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
+                if batch_idx < 1:
+                    self.sample = x
+                    self.out = x_decode
+                    self.sample_loss = loss.item()
+                    self.mu = mu
+                    self.logvar = logvar
                 loss.backward()
+                if make_grad_gif:
+                    plt = uu.plot_grad_flow(self.network.named_parameters())
+                    plt.title('Epoch {}  Frame {}'.format(epoch, frame))
+                    fn = 'gif/{}.png'.format(frame)
+                    plt.savefig(fn)
+                    plt.close()
+                    images.append(imageio.imread(fn))
+                    frame += 1
                 self.optimizer.step()
-                self.optimizer.zero_grad()
 
                 losses.append(loss.item())
                 if log:
@@ -194,20 +249,20 @@ class PlastVAEGen():
                     log_file.write('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'train',loss.item(),bce.item(),kld.item()))
                     log_file.close()
                 # print('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'train',loss.item(),bce.item(),kld.item()))
-
             train_loss = np.mean(losses)
             self.history['train_loss'].append(train_loss)
             self.n_epochs += 1
 
             # Val Loop
             self.network.eval()
+            h = self.network.decoder.init_hidden(self.params['BATCH_SIZE']).data
             losses = []
             for batch_idx, data in enumerate(val_loader):
                 if use_gpu:
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
-                x_decode, mu, logvar = self.network(x)
+                x_decode, mu, logvar, h = self.network(x, h.data)
                 loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
                 losses.append(loss.item())
                 if log:
@@ -240,12 +295,17 @@ class PlastVAEGen():
             self.save(self.current_state, 'latest.ckpt')
             self.save(self.best_state, 'best.ckpt')
         self.trained = True
+        if make_grad_gif:
+            imageio.mimsave('grads4.gif', images)
+            shutil.rmtree('gif')
 
     def predict(self, data):
         """
         Predicts output given a set of input data (model must already be trained)
         """
         self.network.eval()
+        h = self.network.decoder.init_hidden(data.shape[0])
         x = torch.autograd.Variable(torch.from_numpy(data))
-        x_decode, mu, logvar = self.network(x)
+        x_decode, mu, logvar, h = self.network(x, h.data)
+        x_decode = F.softmax(x_decode, dim=1)
         return x_decode.cpu().detach().numpy()
