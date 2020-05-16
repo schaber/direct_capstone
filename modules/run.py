@@ -12,5 +12,4 @@ from vae_generator import PlastVAEGen
 gdb_test = pd.read_pickle('../database/gdb_vae_test.pkl').to_numpy()
 
 pvg = PlastVAEGen()
-pvg.initiate(gdb_test)
-pvg.train()
+pvg.train(gdb_test)
