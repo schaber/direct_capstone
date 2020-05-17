@@ -33,7 +33,7 @@ class ConvEncoder(nn.Module):
                  conv_layers=3,
                  filter_sizes=[9,9,10],
                  channels=[9,9,11],
-                 fc_width=196):
+                 fc_width=512):
         super().__init__()
 
         final_dense_width = (input_shape[-1] - (filter_sizes[0] - 1) - (filter_sizes[1] - 1) - (filter_sizes[2] - 1)) * channels[-1]
@@ -41,19 +41,16 @@ class ConvEncoder(nn.Module):
         self.conv2 = nn.Conv1d(channels[0], channels[1], filter_sizes[1])
         self.conv3 = nn.Conv1d(channels[1], channels[2], filter_sizes[2])
         self.dense = nn.Linear(final_dense_width, fc_width)
+        self.bn = nn.BatchNorm1d(fc_width)
         self.z_means = nn.Linear(fc_width, latent_size)
         self.z_vars = nn.Linear(fc_width, latent_size)
 
     def encode(self, x):
-        x = self.conv1(x)
-        x = F.relu(x)
-        x = self.conv2(x)
-        x = F.relu(x)
-        x = self.conv3(x)
-        x = F.relu(x)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
         x = x.contiguous().view(x.size(0), -1)
-        x = self.dense(x)
-        x = F.relu(x)
+        x = self.bn(F.relu(self.dense(x)))
         mu, logvar = self.z_means(x), self.z_vars(x)
         return mu, logvar
 
@@ -72,23 +69,32 @@ class GRUDecoder(nn.Module):
                  input_shape,
                  latent_size,
                  gru_layers=3,
-                 gru_size=488):
+                 gru_size=488,
+                 drop_prob=0.2):
         super().__init__()
 
         self.repeat = input_shape[1]
-        self.latent_input = nn.Linear(latent_size, latent_size)
-        self.gru = nn.GRU(latent_size, gru_size, gru_layers)
-        self.decode = TimeDistributed(nn.Linear(gru_size, input_shape[0]))
+        self.hidden_dim = gru_size
+        self.n_layers = gru_layers
+        self.gru = nn.GRU(latent_size, gru_size, gru_layers, dropout=drop_prob)
+        self.decode = nn.Linear(gru_size, input_shape[0])
+        self.bn = nn.BatchNorm1d(input_shape[0])
+        self.log_sm = nn.LogSoftmax(1)
 
-    def forward(self, x):
-        x = self.latent_input(x)
-        x = F.relu(x)
+    def forward(self, x, h):
         x = x.unsqueeze(0).repeat(self.repeat, 1, 1)
-        x, h_n = self.gru(x)
+        x, h = self.gru(x, h)
+        h = h.detach()
         x = self.decode(x)
-        x = F.softmax(x, dim=2)
-        x = x.permute(1, 2, 0)
-        return x
+        x = self.bn(x.permute(1, 2, 0))
+        # x = self.log_sm(x)
+        # x = F.softmax(x, dim=1)
+        return x, h
+
+    def init_hidden(self, batch_size):
+        weight = next(self.parameters()).data
+        hidden = weight.new_zeros(self.n_layers, batch_size, self.hidden_dim)
+        return hidden
 
 class GenerativeVAE(nn.Module):
     def __init__(self,
@@ -99,7 +105,7 @@ class GenerativeVAE(nn.Module):
         self.encoder = ConvEncoder(input_shape, latent_size)
         self.decoder = GRUDecoder(input_shape, latent_size)
 
-    def forward(self, x):
+    def forward(self, x, h):
         z, mu, logvar = self.encoder(x)
-        x_decode = self.decoder(z)
-        return x_decode, mu, logvar
+        x_decode, h = self.decoder(z, h)
+        return x_decode, mu, logvar, h

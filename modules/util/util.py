@@ -1,11 +1,33 @@
 import math
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression, Lasso, LinearRegression, SGDClassifier
 from sklearn import model_selection
 # import pubchempy as pcp
+
+# PyTorch Gradients Function
+def plot_grad_flow(named_parameters):
+    ave_grads = []
+    layers = []
+    for n, p in named_parameters:
+        if(p.requires_grad) and ("bias" not in n):
+            layers.append(n)
+            ave_grads.append(p.grad.abs().mean())
+    layers = np.array(layers)
+    ave_grads = np.array(ave_grads)
+    plt.plot(ave_grads, alpha=0.3, color="b")
+    plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
+    plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+    plt.xlim(xmin=0, xmax=len(ave_grads))
+    plt.xlabel("Layers")
+    plt.ylabel("average gradient")
+    plt.title("Gradient flow")
+    plt.grid(True)
+    plt.tight_layout()
+    return plt
 
 # SMILES Helper Functions
 def get_smiles_vocab(smiles, start_char=False):
@@ -41,10 +63,10 @@ def sample_distribution(a, temp=1.0):
     dist = np.exp(a)/np.sum(np.exp(a))
     return np.random.choice(range(len(a)), p=dist)
 
-def decode_smiles(one_hot_mat, ord_dict):
+def decode_smiles(one_hot_mat, ord_dict, temp=0.5):
     smile = ''
     for i in range(one_hot_mat.shape[1]):
-        smile += ord_dict[sample_distribution(one_hot_mat[:,i])]
+        smile += ord_dict[sample_distribution(one_hot_mat[:,i], temp=temp)]
     return smile
 
 
