@@ -329,7 +329,6 @@ class PlastVAEGen_v2():
                               'model_state_dict': None,
                               'optimizer_state_dict': None,
                               'best_loss': self.best_loss,
-                              'input_shape': None,
                               'latent_size': None,
                               'history': self.history,
                               'params': self.params}
@@ -337,7 +336,6 @@ class PlastVAEGen_v2():
                            'model_state_dict': None,
                            'optimizer_state_dict': None,
                            'best_loss': self.best_loss,
-                           'input_shape': None,
                            'latent_size': None,
                            'history': self.history,
                            'params': self.params}
@@ -377,18 +375,19 @@ class PlastVAEGen_v2():
             self.params['MAX_LENGTH'] = int(self.params['DATA_LENGTH'] * 1.5)
         if 'TRAIN_SPLIT' not in self.params.keys():
             self.params['TRAIN_SPLIT'] = 0.8
+        if 'EMBED_DIM' not in self.params.keys():
+            self.params['EMBED_DIM'] = 48
 
-        # One-hot encoding smiles below the max length
+        # Vectorizing smiles below max length
         self.usable_data = [(ll, sm) for ll, sm in zip(self.all_lls, self.all_smiles) if len(sm) < self.params['MAX_LENGTH']]
         self.usable_lls = np.array([x[0] for x in self.usable_data])
         self.usable_smiles = [x[1] for x in self.usable_data]
         self.params['CHAR_DICT'], self.params['ORD_DICT'] = uu.get_smiles_vocab(self.usable_smiles)
         self.params['NUM_CHAR'] = len(self.params['CHAR_DICT'])
         self.params['PAD_NUM'] = self.params['CHAR_DICT']['_']
-        self.encoded = torch.empty((len(self.usable_smiles), self.params['NUM_CHAR'], self.params['MAX_LENGTH']))
+        self.encoded = torch.empty((len(self.usable_smiles), self.params['MAX_LENGTH'] + 1), dtype=torch.long)
         for i, sm in enumerate(self.usable_smiles):
-            self.encoded[i,:,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT']))
-        self.input_shape = (self.params['NUM_CHAR'], self.params['MAX_LENGTH'])
+            self.encoded[i,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT'])).long()
 
         # Data preparation
         self.params['N_SAMPLES'] = self.encoded.shape[0]
@@ -398,21 +397,18 @@ class PlastVAEGen_v2():
         self.params['TRAIN_IDXS'] = self.rand_idxs[:self.params['N_TRAIN']]
         self.params['VAL_IDXS'] = self.rand_idxs[self.params['N_TRAIN']:]
 
-        self.X_train = self.encoded[self.params['TRAIN_IDXS'],:,:]
-        self.X_val = self.encoded[self.params['VAL_IDXS'],:,:]
+        self.X_train = self.encoded[self.params['TRAIN_IDXS'],:]
+        self.X_val = self.encoded[self.params['VAL_IDXS'],:]
         self.y_train = self.usable_lls[self.params['TRAIN_IDXS']]
         self.y_val = self.usable_lls[self.params['VAL_IDXS']]
 
         # Build network
         if self.trained:
-            assert self.input_shape == self.current_state['input_shape'], "ERROR - Shape of data different than that used to train loaded model"
             assert self.latent_size == self.current_state['latent_size'], "ERROR - Latent space of trained model unequal to input parameter"
         else:
-            self.network = GenerativeVAE_v2(self.input_shape, self.latent_size)
+            self.network = GenerativeVAE_v2(self.params['MAX_LENGTH'], self.params['NUM_CHAR'], self.params['EMBED_DIM'], self.latent_size)
 
         # Update state dictionaries
-        self.current_state['input_shape'] = self.input_shape
-        self.best_state['input_shape'] = self.input_shape
         self.current_state['latent_size'] = self.latent_size
         self.best_state['latent_size'] = self.latent_size
 
@@ -430,10 +426,9 @@ class PlastVAEGen_v2():
         self.usable_data = [(ll, sm) for ll, sm in zip(self.all_lls, self.all_smiles) if len(sm) < self.params['MAX_LENGTH']]
         self.usable_lls = np.array([x[0] for x in self.usable_data])
         self.usable_smiles = [x[1] for x in self.usable_data]
-        self.encoded = torch.empty((len(self.usable_smiles), self.params['NUM_CHAR'], self.params['MAX_LENGTH']))
+        self.encoded = torch.empty((len(self.usable_smiles), self.params['MAX_LENGTH'] + 1), dtype=torch.long)
         for i, sm in enumerate(self.usable_smiles):
-            self.encoded[i,:,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT']))
-        self.input_shape = (self.params['NUM_CHAR'], self.params['MAX_LENGTH'])
+            self.encoded[i,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT'])).long()
 
         # Data preparation
         self.X_train = self.encoded[self.params['TRAIN_IDXS'],:,:]
@@ -465,8 +460,8 @@ class PlastVAEGen_v2():
             self.trained_initiate(data)
 
         torch.backends.cudnn.benchmark = True
-        use_gpu = torch.cuda.is_available()
-        if use_gpu:
+        self.use_gpu = torch.cuda.is_available()
+        if self.use_gpu:
             self.network.cuda()
         if make_grad_gif:
             os.mkdir('gif')
@@ -518,7 +513,7 @@ class PlastVAEGen_v2():
             losses = []
             for batch_idx, data in enumerate(train_loader):
                 self.network.zero_grad()
-                if use_gpu:
+                if self.use_gpu:
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
@@ -554,11 +549,11 @@ class PlastVAEGen_v2():
             self.network.eval()
             losses = []
             for batch_idx, data in enumerate(val_loader):
-                if use_gpu:
+                if self.use_gpu:
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
-                x_decode, mu, logvar = self.network.inference(x, self.params)
+                x_decode, mu, logvar = self.network.inference(x, self.params, self.use_gpu)
                 loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
                 losses.append(loss.item())
                 if log:
