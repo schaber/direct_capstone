@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegression
+import pickle
 
 class PlastPredictor():
     """
@@ -103,6 +104,20 @@ class PlastPredictor():
         self.pl_test_acc = np.mean(pl_test_accs)
         self.org_train_acc = np.mean(org_train_accs)
         self.org_test_acc = np.mean(org_test_accs)
+
+    def save_model(self, clf_file, scaler_file):
+        """
+        This function saves the model in a pickle file.
+        """
+        pickle.dump(self.clf, open(clf_file, 'wb'))
+        pickle.dump(self.scaler, (open(scaler_file, 'wb')))
+
+    def load_model(self, clf_file, scaler_file):
+        """
+        This function loads the trained model.
+        """
+        self.clf = pickle.load(open(clf_file, 'rb'))
+        self.scaler = pickle.load(open(scaler_file, 'rb'))
 
     def predict(self, X, type='prob', class_id='pos'):
         assert self.clf is not None, "ERROR: You must train the model before predicting"
