@@ -202,7 +202,7 @@ class PlastVAEGen():
             self.optimizer = optim.Adam(self.network.parameters(), lr=self.lr)
 
         # Set up logger
-        if log:
+        if log and not self.trained:
             log_file = open('log.txt', 'a')
             log_file.write('epoch,batch_idx,data_type,tot_loss,bce_loss,kld_loss\n')
             log_file.close()
@@ -225,7 +225,7 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar, h = self.network(x, h.data)
-                loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
+                loss, bce, kld = vae_bce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
                 if batch_idx < 1:
                     self.sample = x
                     self.out = x_decode
@@ -246,12 +246,11 @@ class PlastVAEGen():
                 losses.append(loss.item())
                 if log:
                     log_file = open('log.txt', 'a')
-                    log_file.write('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'train',loss.item(),bce.item(),kld.item()))
+                    log_file.write('{},{},{},{},{},{}\n'.format(self.n_epochs,batch_idx,'train',loss.item(),bce.item(),kld.item()))
                     log_file.close()
                 # print('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'train',loss.item(),bce.item(),kld.item()))
             train_loss = np.mean(losses)
             self.history['train_loss'].append(train_loss)
-            self.n_epochs += 1
 
             # Val Loop
             self.network.eval()
@@ -263,11 +262,11 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar, h = self.network(x, h.data)
-                loss, bce, kld = vae_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
+                loss, bce, kld = vae_bce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
                 losses.append(loss.item())
                 if log:
                     log_file = open('log.txt', 'a')
-                    log_file.write('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'test',loss.item(),bce.item(),kld.item()))
+                    log_file.write('{},{},{},{},{},{}\n'.format(self.n_epochs,batch_idx,'test',loss.item(),bce.item(),kld.item()))
                     log_file.close()
                 # print('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'test',loss.item(),bce.item(),kld.item()))
             val_loss = np.mean(losses)
@@ -275,6 +274,7 @@ class PlastVAEGen():
             print('Epoch - {}  Train Loss - {}  Val Loss - {}'.format(self.n_epochs,
                                                                       round(train_loss, 2),
                                                                       round(val_loss, 2)))
+            self.n_epochs += 1
 
             if save_best:
                 if val_loss < self.best_loss:
