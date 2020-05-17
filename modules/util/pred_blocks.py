@@ -109,3 +109,115 @@ class GenerativeVAE(nn.Module):
         z, mu, logvar = self.encoder(x)
         x_decode, h = self.decoder(z, h)
         return x_decode, mu, logvar, h
+
+class ConvEncoder_v2(nn.Module):
+    def __init__(self,
+                 input_shape,
+                 latent_size,
+                 conv_layers=3,
+                 filter_sizes=[9,9,10],
+                 channels=[9,9,11],
+                 fc_width=168):
+        super().__init__()
+
+        final_dense_width = (input_shape[-1] - (filter_sizes[0] - 1) - (filter_sizes[1] - 1) - (filter_sizes[2] - 1)) * channels[-1]
+        self.conv1 = nn.Conv1d(input_shape[0], channels[0], filter_sizes[0])
+        self.conv2 = nn.Conv1d(channels[0], channels[1], filter_sizes[1])
+        self.conv3 = nn.Conv1d(channels[1], channels[2], filter_sizes[2])
+        self.dense = nn.Linear(final_dense_width, fc_width)
+        self.bn = nn.BatchNorm1d(fc_width)
+        self.z_means = nn.Linear(fc_width, latent_size)
+        self.z_vars = nn.Linear(fc_width, latent_size)
+
+    def encode(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = x.contiguous().view(x.size(0), -1)
+        x = self.bn(F.relu(self.dense(x)))
+        mu, logvar = self.z_means(x), self.z_vars(x)
+        return mu, logvar
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        return mu + eps*std
+
+    def forward(self, x):
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        return z, mu, logvar
+
+class GRUDecoder_v2(nn.Module):
+    def __init__(self,
+                 input_shape,
+                 latent_size,
+                 gru_layers=3,
+                 gru_size=488,
+                 drop_prob=0.2):
+        super().__init__()
+
+        self.hidden_dim = gru_size
+        self.n_layers = gru_layers
+        self.voc_size = input_shape[0]
+        self.seq_len = input_shape[1]
+        self.l2h = nn.Linear(latent_size, gru_size * gru_layers)
+        self.gru = nn.GRU(input_shape[0], gru_size, gru_layers, dropout=drop_prob, batch_first=True)
+        self.decode = nn.Linear(gru_size, input_shape[0])
+        self.bn = nn.BatchNorm1d(input_shape[0])
+        self.log_sm = nn.LogSoftmax(1)
+
+    def forward(self, x, z):
+        h = F.relu(self.l2h(z))
+        h = h.view(-1, self.n_layers, self.hidden_dim)
+        h = h.permute(1, 0, 2).contiguous()
+        x = x.permute(0, 2, 1).contiguous()
+
+        x, _ = self.gru(x, h)
+        b, seq_len, hsize = x.size()
+        x = x.contiguous().view(-1, hsize)
+        x = self.decode(x)
+        x = x.view(b, self.voc_size, seq_len)
+        x = self.bn(x)
+        return x
+
+    def inference(self, z, params):
+        max_len = params['MAX_LENGTH']
+        batch_size = z.size(0)
+        h = F.relu(self.l2h(z))
+        h = h.view(-1, self.n_layers, self.hidden_dim)
+        h = h.permute(1, 0, 2).contiguous()
+
+        input_seq = torch.Tensor(batch_size).fill_(params['PAD_NUM']).unsqueeze(1).long()
+        logits_t = torch.FloatTensor()
+        for t in range(max_len):
+            input_embedding = torch.zeros(batch_size, input_seq.size(1), params['NUM_CHAR'])
+            for i in range(batch_size):
+                for j in range(input_seq.size(1)):
+                    input_embedding[i,j,input_seq[i,j]] = 1
+            x, h = self.gru(input_embedding, h)
+            logits = self.decode(x)
+            logits_t = torch.cat((logits_t, logits), dim=1)
+            input_seq = torch.argmax(logits, dim=-1)
+        logits_t = logits_t.view(batch_size, self.voc_size, self.seq_len).contiguous()
+        return logits_t
+
+
+class GenerativeVAE_v2(nn.Module):
+    def __init__(self,
+                 input_shape,
+                 latent_size):
+        super().__init__()
+
+        self.encoder = ConvEncoder_v2(input_shape, latent_size)
+        self.decoder = GRUDecoder_v2(input_shape, latent_size)
+
+    def forward(self, x):
+        z, mu, logvar = self.encoder(x)
+        x_decode = self.decoder(x, z)
+        return x_decode, mu, logvar
+
+    def inference(self, x, params):
+        z, mu, logvar = self.encoder(x)
+        x_decode = self.decoder.inference(z, params)
+        return x_decode, mu, logvar
