@@ -595,7 +595,7 @@ class PlastVAEGen_v2():
                     self.best_state['optimizer_state_dict'] = self.optimizer.state_dict()
                     self.best_state['best_loss'] = self.best_loss
                     self.best_state['history'] = self.history
-                    self.save(self.best_state, 'best.ckpt')
+                    self.save(self.best_state, 'best')
             self.current_state['epoch'] = self.n_epochs
             self.current_state['model_state_dict'] = self.network.state_dict()
             self.current_state['optimizer_state_dict'] = self.optimizer.state_dict()
