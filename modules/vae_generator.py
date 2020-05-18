@@ -536,7 +536,7 @@ class PlastVAEGen_v2():
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar, x_naive_decode = self.network(x, infer=True, self.params, self.use_gpu)
                 loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['KL_BETA'])
-                _, naive_loss, _ = vae_ce_loss(x, x_naive_decode, mu, logvar, self.params['MAX_LENGTH', beta=self.params['KL_BETA']])
+                _, naive_loss, _ = vae_ce_loss(x, x_naive_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['KL_BETA'])
                 loss.backward()
                 if make_grad_gif:
                     plt = uu.plot_grad_flow(self.network.named_parameters())
@@ -570,7 +570,7 @@ class PlastVAEGen_v2():
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar, x_naive_decode = self.network(x, infer=True, self.params, self.use_gpu)
                 loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['KL_BETA'])
-                _, naive_loss, _ = vae_ce_loss(x, x_naive_decode, mu, logvar, self.params['MAX_LENGTH', beta=self.params['KL_BETA']])
+                _, naive_loss, _ = vae_ce_loss(x, x_naive_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['KL_BETA'])
                 losses.append(loss.item())
                 if log:
                     if self.name is not None:
