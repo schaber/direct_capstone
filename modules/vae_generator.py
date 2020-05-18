@@ -577,7 +577,7 @@ class PlastVAEGen_v2():
                         log_file = open('trials/log{}.txt'.format('_'+self.name), 'a')
                     else:
                         log_file = open('trials/log.txt', 'a')
-                    log_file.write('{},{},{},{},{},{},{}\n'.format(self.n_epochs,batch_idx,'train',loss.item(),bce.item(),kld.item(),naive_loss.item()))
+                    log_file.write('{},{},{},{},{},{},{}\n'.format(self.n_epochs,batch_idx,'test',loss.item(),bce.item(),kld.item(),naive_loss.item()))
                     log_file.close()
                 # print('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'test',loss.item(),bce.item(),kld.item()))
             val_loss = np.mean(losses)
