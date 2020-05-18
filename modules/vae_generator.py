@@ -534,7 +534,7 @@ class PlastVAEGen_v2():
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
-                x_decode, mu, logvar, x_naive_decode = self.network(x, infer=True, self.params, self.use_gpu)
+                x_decode, mu, logvar, x_naive_decode = self.network(x, infer=True, params=self.params, use_gpu=self.use_gpu)
                 loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['KL_BETA'])
                 _, naive_loss, _ = vae_ce_loss(x, x_naive_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['KL_BETA'])
                 loss.backward()
@@ -568,7 +568,7 @@ class PlastVAEGen_v2():
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
-                x_decode, mu, logvar, x_naive_decode = self.network(x, infer=True, self.params, self.use_gpu)
+                x_decode, mu, logvar, x_naive_decode = self.network(x, infer=True, params=self.params, use_gpu=self.use_gpu)
                 loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['KL_BETA'])
                 _, naive_loss, _ = vae_ce_loss(x, x_naive_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['KL_BETA'])
                 losses.append(loss.item())
