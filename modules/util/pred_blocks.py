@@ -218,13 +218,17 @@ class GenerativeVAE_v2(nn.Module):
         self.encoder = ConvEncoder_v2(max_len, embed_dim, latent_size)
         self.decoder = GRUDecoder_v2(max_len, embed_dim, vocab_size, latent_size)
 
-    def forward(self, x):
+    def forward(self, x, infer=False, params={}, use_gpu=False):
         x = x[:,:-1]
         x = self.embed(x)
         x = x.permute(0, 2, 1).contiguous()
         z, mu, logvar = self.encoder(x)
         x_decode = self.decoder(x, z)
-        return x_decode, mu, logvar
+        if infer:
+            x_naive_decode = self.decoder.inference(z, self.embed, params, use_gpu)
+            return x_decode, mu, logvar, x_naive_decode
+        else:
+            return x_decode, mu, logvar
 
     def inference(self, x, params, use_gpu):
         x = x[:,:-1]

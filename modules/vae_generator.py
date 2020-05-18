@@ -312,27 +312,32 @@ class PlastVAEGen():
 
 
 class PlastVAEGen_v2():
-    def __init__(self, params={}, verbose=False):
+    def __init__(self, params={}, name=None, verbose=False):
         self.verbose = verbose
         self.params = {}
+        self.name = name
         for p, v in params.items():
             self.params[p] = v
         if 'LATENT_SIZE' in self.params.keys():
             self.latent_size = self.params['LATENT_SIZE']
         else:
             self.latent_size = 56
+        if 'KL_BETA' not in self.params.keys():
+            self.params['KL_BETA'] = 1.0
         self.history = {'train_loss': [],
                         'val_loss': []}
         self.best_loss = np.inf
         self.n_epochs = 0
-        self.current_state = {'epoch': self.n_epochs,
+        self.current_state = {'name': self.name,
+                              'epoch': self.n_epochs,
                               'model_state_dict': None,
                               'optimizer_state_dict': None,
                               'best_loss': self.best_loss,
                               'latent_size': None,
                               'history': self.history,
                               'params': self.params}
-        self.best_state = {'epoch': self.n_epochs,
+        self.best_state = {'name': self.name,
+                           'epoch': self.n_epochs,
                            'model_state_dict': None,
                            'optimizer_state_dict': None,
                            'best_loss': self.best_loss,
@@ -344,7 +349,14 @@ class PlastVAEGen_v2():
     def save(self, state, fn, path='checkpoints'):
         os.makedirs(path, exist_ok=True)
         if os.path.splitext(fn)[1] == '':
-            save_fn += '.ckpt'
+            if self.name is not None:
+                fn += '_' + self.name
+            fn += '.ckpt'
+        else:
+            if self.name is not None:
+                fn, ext = fn.split('.')
+                fn += '_' + self.name
+                fn = '.'.join(fn, ext)
         torch.save(state, os.path.join(path, fn))
 
     def load(self, checkpoint_path):
@@ -352,6 +364,7 @@ class PlastVAEGen_v2():
         for key in self.current_state.keys():
             self.current_state[key] = loaded_checkpoint[key]
 
+        self.name = self.current_state['name']
         self.history = self.current_state['history']
         self.n_epochs = self.current_state['epoch']
         self.best_loss = self.current_state['best_loss']
@@ -497,8 +510,12 @@ class PlastVAEGen_v2():
 
         # Set up logger
         if log and not self.trained:
-            log_file = open('log.txt', 'a')
-            log_file.write('epoch,batch_idx,data_type,tot_loss,bce_loss,kld_loss\n')
+            os.makedirs('trials', exist_ok=True)
+            if self.name is not None:
+                log_file = open('trials/log{}.txt'.format('_'+self.name), 'a')
+            else:
+                log_file = open('trials/log.txt', 'a')
+            log_file.write('epoch,batch_idx,data_type,tot_loss,bce_loss,kld_loss,naive_loss\n')
             log_file.close()
 
         # Epoch Looper
@@ -517,14 +534,9 @@ class PlastVAEGen_v2():
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
-                x_decode, mu, logvar = self.network(x)
-                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
-                if batch_idx < 1:
-                    self.sample = x
-                    self.out = x_decode
-                    self.sample_loss = loss.item()
-                    self.mu = mu
-                    self.logvar = logvar
+                x_decode, mu, logvar, x_naive_decode = self.network(x, infer=True, self.params, self.use_gpu)
+                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['TRAIN_BETA'])
+                _, naive_loss, _ = vae_ce_loss(x, x_naive_decode, mu, logvar, self.params['MAX_LENGTH', beta=self.params['TRAIN_BETA']])
                 loss.backward()
                 if make_grad_gif:
                     plt = uu.plot_grad_flow(self.network.named_parameters())
@@ -538,8 +550,11 @@ class PlastVAEGen_v2():
 
                 losses.append(loss.item())
                 if log:
-                    log_file = open('log.txt', 'a')
-                    log_file.write('{},{},{},{},{},{}\n'.format(self.n_epochs,batch_idx,'train',loss.item(),bce.item(),kld.item()))
+                    if self.name is not None:
+                        log_file = open('trials/log{}.txt'.format('_'+self.name), 'a')
+                    else:
+                        log_file = open('trials/log.txt', 'a')
+                    log_file.write('{},{},{},{},{},{},{}\n'.format(self.n_epochs,batch_idx,'train',loss.item(),bce.item(),kld.item(),naive_loss.item()))
                     log_file.close()
                 # print('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'train',loss.item(),bce.item(),kld.item()))
             train_loss = np.mean(losses)
@@ -553,12 +568,16 @@ class PlastVAEGen_v2():
                     data = data.cuda()
 
                 x = torch.autograd.Variable(data)
-                x_decode, mu, logvar = self.network.inference(x, self.params, self.use_gpu)
-                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'])
+                x_decode, mu, logvar, x_naive_decode = self.network(x, infer=True, self.params, self.use_gpu)
+                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], beta=self.params['TRAIN_BETA'])
+                _, naive_loss, _ = vae_ce_loss(x, x_naive_decode, mu, logvar, self.params['MAX_LENGTH', beta=self.params['TRAIN_BETA']])
                 losses.append(loss.item())
                 if log:
-                    log_file = open('log.txt', 'a')
-                    log_file.write('{},{},{},{},{},{}\n'.format(self.n_epochs,batch_idx,'test',loss.item(),bce.item(),kld.item()))
+                    if self.name is not None:
+                        log_file = open('trials/log{}.txt'.format('_'+self.name), 'a')
+                    else:
+                        log_file = open('trials/log.txt', 'a')
+                    log_file.write('{},{},{},{},{},{},{}\n'.format(self.n_epochs,batch_idx,'train',loss.item(),bce.item(),kld.item(),naive_loss.item()))
                     log_file.close()
                 # print('{},{},{},{},{},{}\n'.format(epoch,batch_idx,'test',loss.item(),bce.item(),kld.item()))
             val_loss = np.mean(losses)
@@ -584,8 +603,8 @@ class PlastVAEGen_v2():
             self.current_state['history'] = self.history
             self.best_state['history'] = self.history
         if save_last:
-            self.save(self.current_state, 'latest.ckpt')
-            self.save(self.best_state, 'best.ckpt')
+            self.save(self.current_state, 'latest')
+            self.save(self.best_state, 'best')
         self.trained = True
         if make_grad_gif:
             imageio.mimsave('grads4.gif', images)
