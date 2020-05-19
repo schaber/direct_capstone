@@ -12,17 +12,17 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 # keras
-import keras
-from keras.models import Sequential, Model
-from keras.optimizers import Adam
-from keras import backend as K
-from keras import objectives
-from keras.objectives import binary_crossentropy #objs or losses
-from keras.layers import Dense, Dropout, Input, Multiply, Add, Lambda, concatenate
-from keras.layers.core import Dense, Activation, Flatten, RepeatVector
-from keras.layers.wrappers import TimeDistributed
-from keras.layers.recurrent import GRU
-from keras.layers.convolutional import Convolution1D
+# import keras
+# from keras.models import Sequential, Model
+# from keras.optimizers import Adam
+# from keras import backend as K
+# from keras import objectives
+# from keras.objectives import binary_crossentropy #objs or losses
+# from keras.layers import Dense, Dropout, Input, Multiply, Add, Lambda, concatenate
+# from keras.layers.core import Dense, Activation, Flatten, RepeatVector
+# from keras.layers.wrappers import TimeDistributed
+# from keras.layers.recurrent import GRU
+# from keras.layers.convolutional import Convolution1D
 
 # me
 import util.util as uu
