@@ -47,10 +47,16 @@ def get_smiles_vocab(smiles, start_char=False):
     ord_dict[i+1] = '_'
     return char_dict, ord_dict
 
-def encode_smiles(smile, max_len, char_dict):
-    smile += '_'*(max_len + 1 - len(smile))
+def encode_smiles(smile, max_len, char_dict, one_hot=True):
+    smile += '_'*(max_len - len(smile))
     smile_vec = [char_dict[c] for c in smile]
-    return smile_vec
+    if one_hot:
+        encoded_smile = np.zeros((len(char_dict), max_len))
+        for t, idx in enumerate(smile_vec):
+            encoded_smile[idx, t] = 1
+        return encoded_smile
+    else:
+        return smile_vec
 
 def sample_distribution(a, temp=1.0):
     a = np.log(a) / temp

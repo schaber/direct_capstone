@@ -20,7 +20,7 @@ def vae_bce_loss(x, x_decode, mu, logvar, max_len, beta=1):
     x = x.contiguous().view(-1, x.size(2))
     x_decode = x_decode.contiguous().view(-1, x_decode.size(2))
     BCE = F.binary_cross_entropy_with_logits(x_decode, x, reduction='mean')
-    KLD = beta * -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    KLD = beta * -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
     return BCE + KLD, BCE, KLD
 
 def ce_loss(x, x_decode):

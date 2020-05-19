@@ -81,15 +81,15 @@ class GRUDecoder(nn.Module):
         self.bn = nn.BatchNorm1d(input_shape[0])
         self.log_sm = nn.LogSoftmax(1)
 
-    def forward(self, x, h):
+    def forward(self, x):
         x = x.unsqueeze(0).repeat(self.repeat, 1, 1)
-        x, h = self.gru(x, h)
+        x, h = self.gru(x)
         h = h.detach()
         x = self.decode(x)
         x = self.bn(x.permute(1, 2, 0))
         # x = self.log_sm(x)
         # x = F.softmax(x, dim=1)
-        return x, h
+        return x
 
     def init_hidden(self, batch_size):
         weight = next(self.parameters()).data
@@ -105,10 +105,10 @@ class GenerativeVAE(nn.Module):
         self.encoder = ConvEncoder(input_shape, latent_size)
         self.decoder = GRUDecoder(input_shape, latent_size)
 
-    def forward(self, x, h):
+    def forward(self, x):
         z, mu, logvar = self.encoder(x)
-        x_decode, h = self.decoder(z, h)
-        return x_decode, mu, logvar, h
+        x_decode = self.decoder(z)
+        return x_decode, mu, logvar
 
 class ConvEncoder_v2(nn.Module):
     def __init__(self,
