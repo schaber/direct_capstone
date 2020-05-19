@@ -83,7 +83,6 @@ class GRUDecoder(nn.Module):
         self.gru = nn.GRU(latent_size, gru_size, gru_layers, dropout=drop_prob)
         self.decode = nn.Linear(gru_size, input_shape[0])
         self.bn = nn.BatchNorm1d(input_shape[0])
-        self.log_sm = nn.LogSoftmax(1)
 
     def forward(self, x):
         x = x.unsqueeze(0).repeat(self.repeat, 1, 1)
@@ -91,8 +90,6 @@ class GRUDecoder(nn.Module):
         h = h.detach()
         x = self.decode(x)
         x = self.bn(x.permute(1, 2, 0))
-        # x = self.log_sm(x)
-        # x = F.softmax(x, dim=1)
         return x
 
     def init_hidden(self, batch_size):
