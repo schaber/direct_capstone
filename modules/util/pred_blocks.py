@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # keras
-import tensorflow as tf
+# import tensorflow as tf
 
 class TimeDistributed(nn.Module):
     def __init__(self, module, batch_first=False):
