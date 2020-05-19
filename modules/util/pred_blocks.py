@@ -1,6 +1,10 @@
+# torch
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+# keras
+import tensorflow as tf
 
 class TimeDistributed(nn.Module):
     def __init__(self, module, batch_first=False):
@@ -237,3 +241,12 @@ class GenerativeVAE_v2(nn.Module):
         z, mu, logvar = self.encoder(x)
         x_decode = self.decoder.inference(z, self.embed, params, use_gpu)
         return x_decode, mu, logvar
+
+# class GenerativeVAE_tf(tf.keras.Model):
+#     def __init__(self,
+#                  x,
+#                  latent_size,
+#                  max_length,
+#                  channels=[9,9,11],
+#                  filter_sizes=[9,9,10],
+#                  fc_width):

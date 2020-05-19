@@ -3,11 +3,28 @@ import sys
 import shutil
 import imageio
 import numpy as np
+
+# torch
 import torch
 import torch.utils.data
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+
+# keras
+import keras
+from keras.models import Sequential, Model
+from keras.optimizers import Adam
+from keras import backend as K
+from keras import objectives
+from keras.objectives import binary_crossentropy #objs or losses
+from keras.layers import Dense, Dropout, Input, Multiply, Add, Lambda, concatenate
+from keras.layers.core import Dense, Activation, Flatten, RepeatVector
+from keras.layers.wrappers import TimeDistributed
+from keras.layers.recurrent import GRU
+from keras.layers.convolutional import Convolution1D
+
+# me
 import util.util as uu
 from util.pred_blocks import GenerativeVAE, GenerativeVAE_v2
 from util.losses import vae_bce_loss, vae_ce_loss
@@ -653,3 +670,16 @@ class PlastVAEGen_v2():
         x_decode, mu, logvar = self.network(x)
         x_decode = F.softmax(x_decode, dim=1)
         return x_decode.cpu().detach().numpy()
+
+
+class PlastVAEGen_tf():
+    def __init__(self, params={}, name=None, verbose=False):
+        self.verbose = verbose
+        self.params = params
+        self.name = name
+        if 'LATENT_SIZE' in self.params.keys():
+            self.latent_size = self.params['LATENT_SIZE']
+        else:
+            self.latent_size = 512
+        if 'KL_BETA' not in self.params.keys():
+            self.params['KL_BETA'] = 1.0
