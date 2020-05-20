@@ -39,7 +39,7 @@ class PlastVAEGen():
         if 'LATENT_SIZE' in self.params.keys():
             self.latent_size = self.params['LATENT_SIZE']
         else:
-            self.latent_size = 512
+            self.latent_size = 84
         if 'KL_BETA' not in self.params.keys():
             self.params['KL_BETA'] = 1.0
         self.history = {'train_loss': [],
@@ -259,7 +259,7 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss, bce, kld = vae_bce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], self.params['KL_BETA'])
+                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], self.params['KL_BETA'])
                 # if batch_idx < 1:
                 #     self.test_sample = x.numpy()
                 #     self.real_loss = loss.item()
@@ -300,7 +300,7 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss, bce, kld = vae_bce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], self.params['KL_BETA'])
+                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], self.params['KL_BETA'])
                 # if batch_idx < 1:
                 #     self.test_sample = x.numpy()
                 #     self.real_loss = loss.item()
@@ -356,7 +356,7 @@ class PlastVAEGen():
         if return_all:
             return x_decode, mu, logvar
         else:
-            x_decode = F.softmax(x_decode, dim=1)
+            # x_decode = F.softmax(x_decode, dim=1)
             return x_decode.cpu().detach().numpy()
 
 class PlastVAEGen_v2():

@@ -72,20 +72,27 @@ class GRUDecoder(nn.Module):
     def __init__(self,
                  input_shape,
                  latent_size,
+                 gru_in_dim=48,
                  gru_layers=3,
                  gru_size=488,
                  drop_prob=0.2):
         super().__init__()
 
-        self.repeat = input_shape[1]
+        # self.repeat = input_shape[1]
+        self.num_char = input_shape[0]
+        self.max_len = input_shape[1]
+        self.embed_len = gru_in_dim #
         self.hidden_dim = gru_size
         self.n_layers = gru_layers
-        self.gru = nn.GRU(latent_size, gru_size, gru_layers, dropout=drop_prob)
-        self.decode = nn.Linear(gru_size, input_shape[0])
-        self.bn = nn.BatchNorm1d(input_shape[0])
+        self.dense = nn.Linear(latent_size, self.max_len*gru_in_dim) #
+        self.gru = nn.GRU(gru_in_dim, gru_size, gru_layers, dropout=drop_prob) #
+        self.decode = nn.Linear(gru_size, self.num_char)
+        self.bn = nn.BatchNorm1d(self.num_char)
 
     def forward(self, x):
-        x = x.unsqueeze(0).repeat(self.repeat, 1, 1)
+        # x = x.unsqueeze(0).repeat(self.repeat, 1, 1)
+        x = F.relu(self.dense(x)) #
+        x = x.unsqueeze(1).view(x.size(0), self.embed_len, self.max_len).permute(2, 0, 1) #
         x, h = self.gru(x)
         h = h.detach()
         x = self.decode(x)
