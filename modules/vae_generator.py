@@ -11,6 +11,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
+# wandb
+import wandb
+
 # keras
 # import keras
 # from keras.models import Sequential, Model
@@ -30,10 +33,11 @@ from util.pred_blocks import GenerativeVAE, GenerativeVAE_v2
 from util.losses import vae_bce_loss, vae_ce_loss
 
 class PlastVAEGen():
-    def __init__(self, params={}, name=None, verbose=False):
+    def __init__(self, params={}, name=None, verbose=False, watch=False):
         self.verbose = verbose
         self.params = {}
         self.name = name
+        self.watch = watch
         for p, v in params.items():
             self.params[p] = v
         if 'LATENT_SIZE' in self.params.keys():
@@ -103,9 +107,9 @@ class PlastVAEGen():
         # Setting up parameters
         self.all_smiles = data[:,0]
         self.all_lls = data[:,1]
-        self.params['DATA_LENGTH'] = max(map(len, data[:,0]))
+        self.all_smiles = [uu.smi_tokenizer(smi) for smi in self.all_smiles]
         if 'MAX_LENGTH' not in self.params.keys():
-            self.params['MAX_LENGTH'] = int(self.params['DATA_LENGTH'] * 1.5)
+            self.params['MAX_LENGTH'] = 100
         if 'TRAIN_SPLIT' not in self.params.keys():
             self.params['TRAIN_SPLIT'] = 0.8
 
@@ -128,6 +132,7 @@ class PlastVAEGen():
         self.rand_idxs = np.random.choice(np.arange(self.params['N_SAMPLES']), size=self.params['N_SAMPLES'])
         self.params['TRAIN_IDXS'] = self.rand_idxs[:self.params['N_TRAIN']]
         self.params['VAL_IDXS'] = self.rand_idxs[self.params['N_TRAIN']:]
+        self.params['CHAR_WEIGHTS'] = uu.get_char_weights(np.array(self.usable_smiles)[self.params['TRAIN_IDXS']], self.params)
 
         self.X_train = self.encoded[self.params['TRAIN_IDXS'],:,:]
         self.X_val = self.encoded[self.params['VAL_IDXS'],:,:]
@@ -146,6 +151,9 @@ class PlastVAEGen():
         self.best_state['input_shape'] = self.input_shape
         self.current_state['latent_size'] = self.latent_size
         self.best_state['latent_size'] = self.latent_size
+
+        if self.watch:
+            wandb.init(project='plastgenvae')
 
     def trained_initiate(self, data):
         """
@@ -171,6 +179,9 @@ class PlastVAEGen():
         self.X_val = self.encoded[self.params['VAL_IDXS'],:,:]
         self.y_train = self.usable_lls[self.params['TRAIN_IDXS']]
         self.y_val = self.usable_lls[self.params['VAL_IDXS']]
+
+        if self.watch:
+            wandb.init(project='plastgenvae')
 
     def train(self, data, save_last=True, save_best=True, log=True, make_grad_gif=False):
         """
@@ -241,6 +252,10 @@ class PlastVAEGen():
             log_file.write('epoch,batch_idx,data_type,tot_loss,bce_loss,kld_loss\n')
             log_file.close()
 
+        # Set up metric evaluation
+        if self.watch:
+            wandb.watch(self.network)
+
         # Epoch Looper
         for epoch in range(epochs):
             if self.verbose:
@@ -259,7 +274,9 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], self.params['KL_BETA'])
+                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['CHAR_WEIGHTS'], self.params['KL_BETA'])
+                if self.watch:
+                    wandb.log({'BCE Loss': bce.item(), 'KLD Loss': kld.item()})
                 # if batch_idx < 1:
                 #     self.test_sample = x.numpy()
                 #     self.real_loss = loss.item()
@@ -300,7 +317,7 @@ class PlastVAEGen():
 
                 x = torch.autograd.Variable(data)
                 x_decode, mu, logvar = self.network(x)
-                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['MAX_LENGTH'], self.params['KL_BETA'])
+                loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['CHAR_WEIGHTS'], self.params['KL_BETA'])
                 # if batch_idx < 1:
                 #     self.test_sample = x.numpy()
                 #     self.real_loss = loss.item()

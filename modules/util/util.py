@@ -1,8 +1,9 @@
+import re
 import math
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression, Lasso, LinearRegression, SGDClassifier
 from sklearn import model_selection
@@ -30,6 +31,13 @@ def plot_grad_flow(named_parameters):
     return plt
 
 # SMILES Helper Functions
+def smi_tokenizer(smile):
+    pattern =  "(\[[^\]]+]|Br?|Cl?|N|O|S|P|F|I|b|c|n|o|s|p|\(|\)|\.|=|#|-|\+|\\\\|\/|:|~|@|\?|>|\*|\$|\%[0-9]{2}|[0-9])"
+    regezz = re.compile(pattern)
+    tokens = [token for token in regezz.findall(smile)]
+    assert smile == ''.join(tokens)
+    return tokens
+
 def get_smiles_vocab(smiles, start_char=False):
     if start_char:
         i = 0
@@ -48,7 +56,8 @@ def get_smiles_vocab(smiles, start_char=False):
     return char_dict, ord_dict
 
 def encode_smiles(smile, max_len, char_dict, one_hot=True):
-    smile += '_'*(max_len - len(smile))
+    for _ in range(max_len - len(smile)):
+        smile.append('_')
     smile_vec = [char_dict[c] for c in smile]
     if one_hot:
         encoded_smile = np.zeros((len(char_dict), max_len))
@@ -68,6 +77,31 @@ def decode_smiles(one_hot_mat, ord_dict, temp=0.5):
     for i in range(one_hot_mat.shape[1]):
         smile += ord_dict[sample_distribution(one_hot_mat[:,i], temp=temp)]
     return smile
+
+def get_char_weights(train_smiles, params):
+    char_dist = {}
+    char_counts = np.zeros((params['NUM_CHAR'],))
+    char_weights = np.zeros((params['NUM_CHAR'],))
+    for k in params['CHAR_DICT'].keys():
+        char_dist[k] = 0
+    for smile in train_smiles:
+        for i, char in enumerate(smile):
+            char_dist[char] += 1
+        for j in range(i, params['MAX_LENGTH']):
+            char_dist['_'] += 1
+
+    for i, v in enumerate(char_dist.values()):
+        char_counts[i] = v
+    top = np.sum(np.log(char_counts))
+    for i in range(char_counts.shape[0]):
+        char_weights[i] = top / np.log(char_counts[i])
+    min_weight = char_weights.min()
+    for i, w in enumerate(char_weights):
+        if w > 2*min_weight:
+            char_weights[i] = 2*min_weight
+    scaler = MinMaxScaler([0.5,1.0])
+    char_weights = scaler.fit_transform(char_weights.reshape(-1, 1))
+    return char_weights[:,0]
 
 
 ### KDE Funcs

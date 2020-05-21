@@ -85,7 +85,7 @@ class GRUDecoder(nn.Module):
         self.hidden_dim = gru_size
         self.n_layers = gru_layers
         self.dense = nn.Linear(latent_size, self.max_len*gru_in_dim) #
-        self.gru = nn.GRU(gru_in_dim, gru_size, gru_layers, dropout=drop_prob) #
+        self.gru = nn.GRU(gru_in_dim, gru_size, gru_layers, dropout=0) #
         self.decode = nn.Linear(gru_size, self.num_char)
         self.bn = nn.BatchNorm1d(self.num_char)
 
