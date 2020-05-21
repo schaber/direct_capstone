@@ -213,6 +213,7 @@ class PlastVAEGen():
         use_gpu = torch.cuda.is_available()
         if use_gpu:
             self.network.cuda()
+            self.params['CHAR_WEIGHTS'] = self.params['CHAR_WEIGHTS'].cuda()
         if make_grad_gif:
             os.mkdir('gif')
             images = []
