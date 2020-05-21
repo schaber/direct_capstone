@@ -133,7 +133,6 @@ class PlastVAEGen():
         self.params['TRAIN_IDXS'] = self.rand_idxs[:self.params['N_TRAIN']]
         self.params['VAL_IDXS'] = self.rand_idxs[self.params['N_TRAIN']:]
         self.params['CHAR_WEIGHTS'] = torch.tensor(uu.get_char_weights(np.array(self.usable_smiles)[self.params['TRAIN_IDXS']], self.params), dtype=torch.float)
-        print(self.params['CHAR_WEIGHTS'])
 
         self.X_train = self.encoded[self.params['TRAIN_IDXS'],:,:]
         self.X_val = self.encoded[self.params['VAL_IDXS'],:,:]
@@ -166,6 +165,7 @@ class PlastVAEGen():
         # Setting up parameters
         self.all_smiles = data[:,0]
         self.all_lls = data[:,1]
+        self.all_smiles = [uu.smi_tokenizer(smi) for smi in self.all_smiles]
 
         # One-hot encoding smiles below the max length
         self.usable_data = [(ll, sm) for ll, sm in zip(self.all_lls, self.all_smiles) if len(sm) < self.params['MAX_LENGTH']]

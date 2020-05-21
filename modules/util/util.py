@@ -89,7 +89,6 @@ def get_char_weights(train_smiles, params):
             char_dist[char] += 1
         for j in range(i, params['MAX_LENGTH']):
             char_dist['_'] += 1
-
     for i, v in enumerate(char_dist.values()):
         char_counts[i] = v
     top = np.sum(np.log(char_counts))
@@ -101,7 +100,6 @@ def get_char_weights(train_smiles, params):
             char_weights[i] = 2*min_weight
     scaler = MinMaxScaler([0.5,1.0])
     char_weights = scaler.fit_transform(char_weights.reshape(-1, 1))
-    print(char_weights)
     return char_weights[:,0]
 
 
