@@ -12,7 +12,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 # wandb
-import wandb
+#import wandb
 
 # keras
 # import keras
@@ -132,7 +132,8 @@ class PlastVAEGen():
         self.rand_idxs = np.random.choice(np.arange(self.params['N_SAMPLES']), size=self.params['N_SAMPLES'])
         self.params['TRAIN_IDXS'] = self.rand_idxs[:self.params['N_TRAIN']]
         self.params['VAL_IDXS'] = self.rand_idxs[self.params['N_TRAIN']:]
-        self.params['CHAR_WEIGHTS'] = uu.get_char_weights(np.array(self.usable_smiles)[self.params['TRAIN_IDXS']], self.params)
+        self.params['CHAR_WEIGHTS'] = torch.tensor(uu.get_char_weights(np.array(self.usable_smiles)[self.params['TRAIN_IDXS']], self.params), dtype=torch.float)
+        print(self.params['CHAR_WEIGHTS'])
 
         self.X_train = self.encoded[self.params['TRAIN_IDXS'],:,:]
         self.X_val = self.encoded[self.params['VAL_IDXS'],:,:]
@@ -153,7 +154,8 @@ class PlastVAEGen():
         self.best_state['latent_size'] = self.latent_size
 
         if self.watch:
-            wandb.init(project='plastgenvae')
+            pass
+            #wandb.init(project='plastgenvae')
 
     def trained_initiate(self, data):
         """
@@ -181,7 +183,8 @@ class PlastVAEGen():
         self.y_val = self.usable_lls[self.params['VAL_IDXS']]
 
         if self.watch:
-            wandb.init(project='plastgenvae')
+            pass
+            #wandb.init(project='plastgenvae')
 
     def train(self, data, save_last=True, save_best=True, log=True, make_grad_gif=False):
         """
@@ -254,7 +257,8 @@ class PlastVAEGen():
 
         # Set up metric evaluation
         if self.watch:
-            wandb.watch(self.network)
+            pass
+            #wandb.watch(self.network)
 
         # Epoch Looper
         for epoch in range(epochs):
@@ -276,7 +280,8 @@ class PlastVAEGen():
                 x_decode, mu, logvar = self.network(x)
                 loss, bce, kld = vae_ce_loss(x, x_decode, mu, logvar, self.params['CHAR_WEIGHTS'], self.params['KL_BETA'])
                 if self.watch:
-                    wandb.log({'BCE Loss': bce.item(), 'KLD Loss': kld.item()})
+                    pass
+                    #wandb.log({'BCE Loss': bce.item(), 'KLD Loss': kld.item()})
                 # if batch_idx < 1:
                 #     self.test_sample = x.numpy()
                 #     self.real_loss = loss.item()

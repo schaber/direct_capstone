@@ -101,6 +101,7 @@ def get_char_weights(train_smiles, params):
             char_weights[i] = 2*min_weight
     scaler = MinMaxScaler([0.5,1.0])
     char_weights = scaler.fit_transform(char_weights.reshape(-1, 1))
+    print(char_weights)
     return char_weights[:,0]
 
 
