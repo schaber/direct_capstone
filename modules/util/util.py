@@ -78,7 +78,7 @@ def decode_smiles(one_hot_mat, ord_dict, temp=0.5):
         smile += ord_dict[sample_distribution(one_hot_mat[:,i], temp=temp)]
     return smile
 
-def get_char_weights(train_smiles, params):
+def get_char_weights(train_smiles, params, freq_penalty=0.5):
     char_dist = {}
     char_counts = np.zeros((params['NUM_CHAR'],))
     char_weights = np.zeros((params['NUM_CHAR'],))
@@ -98,7 +98,7 @@ def get_char_weights(train_smiles, params):
     for i, w in enumerate(char_weights):
         if w > 2*min_weight:
             char_weights[i] = 2*min_weight
-    scaler = MinMaxScaler([0.5,1.0])
+    scaler = MinMaxScaler([freq_penalty,1.0])
     char_weights = scaler.fit_transform(char_weights.reshape(-1, 1))
     return char_weights[:,0]
 
