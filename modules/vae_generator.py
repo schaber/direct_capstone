@@ -82,9 +82,12 @@ class PlastVAEGen():
         self.history = self.current_state['history']
         self.n_epochs = self.current_state['epoch']
         self.best_loss = self.current_state['best_loss']
-        self.params = self.current_state['params']
+        for k, v in self.current_state['params'].items():
+            self.params[k] = v
         if self.params['MODEL_CLASS'] == 'ConvGRU':
             self.network = ConvGRU(self.current_state['input_shape'], self.current_state['latent_size'])
+        elif self.params['MODEL_CLASS'] == 'ConvbiGRU':
+            self.network = ConvGRU(self.current_state['input_shape'], self.current_state['latent_size'], dec_bi=True)
         elif self.params['MODEL_CLASS'] == 'GRUGRU':
             self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'])
         elif self.params['MODEL_CLASS'] == 'biGRUGRU':
@@ -146,6 +149,8 @@ class PlastVAEGen():
         else:
             if self.params['MODEL_CLASS'] == 'ConvGRU':
                 self.network = ConvGRU(self.input_shape, self.latent_size)
+            elif self.params['MODEL_CLASS'] == 'ConvbiGRU':
+                self.network = ConvGRU(self.input_shape, self.latent_size, dec_bi=True)
             elif self.params['MODEL_CLASS'] == 'GRUGRU':
                 self.network = GRUGRU(self.input_shape, self.latent_size)
             elif self.params['MODEL_CLASS'] == 'biGRUGRU':

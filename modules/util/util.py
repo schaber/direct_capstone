@@ -32,7 +32,7 @@ def plot_grad_flow(named_parameters):
 
 # SMILES Helper Functions
 def smi_tokenizer(smile):
-    pattern =  "(\[[^\]]+]|Br?|Cl?|N|O|S|P|F|I|b|c|n|o|s|p|\(|\)|\.|=|#|-|\+|\\\\|\/|:|~|@|\?|>|\*|\$|\%[0-9]{2}|[0-9])"
+    pattern =  "(\[[^\]]+]|Br?|Cl?|N|O|S|P|F|I|b|c|n|o|s|p|\(|\)|\.|=|#|-|\+|\\\\|\/|_|:|~|@|\?|>|\*|\$|\%[0-9]{2}|[0-9])"
     regezz = re.compile(pattern)
     tokens = [token for token in regezz.findall(smile)]
     assert smile == ''.join(tokens)

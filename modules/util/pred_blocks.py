@@ -134,11 +134,12 @@ class GRUDecoder(nn.Module):
 class ConvGRU(nn.Module):
     def __init__(self,
                  input_shape,
-                 latent_size):
+                 latent_size,
+                 dec_bi=False):
         super().__init__()
 
         self.encoder = ConvEncoder(input_shape, latent_size)
-        self.decoder = GRUDecoder(input_shape, latent_size)
+        self.decoder = GRUDecoder(input_shape, latent_size, bi_direc=dec_bi)
 
     def forward(self, x):
         z, mu, logvar = self.encoder(x)
