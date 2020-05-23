@@ -198,7 +198,7 @@ class PlastVAEGen():
             pass
             #wandb.init(project='plastgenvae')
 
-    def train(self, data, save_last=True, save_best=True, log=True, make_grad_gif=False):
+    def train(self, data, epochs=100, save_last=True, save_best=True, log=True, make_grad_gif=False):
         """
         Function to train model with loaded data
         """
@@ -211,10 +211,6 @@ class PlastVAEGen():
             self.lr = self.params['LEARNING_RATE']
         else:
             self.lr = 1e-4
-        if 'N_EPOCHS' in self.params.keys():
-            epochs = self.params['N_EPOCHS']
-        else:
-            epochs = 100
 
         if not self.trained:
             self.initiate(data)
