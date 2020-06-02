@@ -152,9 +152,11 @@ class PlastVAEGen():
         self.y_val = self.usable_lls[self.params['VAL_IDXS']]
 
         # Build network
-        if self.trained or self.pre_trained:
+        if self.trained:
             assert self.input_shape == self.current_state['input_shape'], "ERROR - Shape of data different than that used to train loaded model"
             assert self.latent_size == self.current_state['latent_size'], "ERROR - Latent space of trained model unequal to input parameter"
+        elif self.pre_trained:
+            pass
         else:
             if self.params['MODEL_CLASS'] == 'ConvGRU':
                 self.network = ConvGRU(self.input_shape, self.latent_size)
