@@ -36,6 +36,8 @@ class PlastVAEGen():
             self.params['FREQ_PENALTY'] = 0.5
         if 'MODEL_CLASS' not in self.params.keys():
             self.params['MODEL_CLASS'] = 'ConvGRU'
+        if 'ARCH_SIZE' not in self.params.keys():
+            self.params['ARCH_SIZE'] = 'small'
         self.history = {'train_loss': [],
                         'val_loss': []}
         self.best_loss = np.inf
@@ -59,6 +61,7 @@ class PlastVAEGen():
                            'history': self.history,
                            'params': self.params}
         self.trained = False
+        self.pre_trained = False
 
     def save(self, state, fn, path='checkpoints'):
         os.makedirs(path, exist_ok=True)
@@ -73,7 +76,7 @@ class PlastVAEGen():
                 fn += '.' + ext
         torch.save(state, os.path.join(path, fn))
 
-    def load(self, checkpoint_path):
+    def load(self, checkpoint_path, transfer=False):
         loaded_checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
         for key in self.current_state.keys():
             self.current_state[key] = loaded_checkpoint[key]
@@ -83,19 +86,25 @@ class PlastVAEGen():
         self.n_epochs = self.current_state['epoch']
         self.best_loss = self.current_state['best_loss']
         for k, v in self.current_state['params'].items():
-            self.params[k] = v
+            if k not in self.params.keys():
+                self.params[k] = v
         if self.params['MODEL_CLASS'] == 'ConvGRU':
             self.network = ConvGRU(self.current_state['input_shape'], self.current_state['latent_size'])
         elif self.params['MODEL_CLASS'] == 'ConvbiGRU':
             self.network = ConvGRU(self.current_state['input_shape'], self.current_state['latent_size'], dec_bi=True)
         elif self.params['MODEL_CLASS'] == 'GRUGRU':
-            self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'])
+            self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], arch_size=self.params['ARCH_SIZE'])
         elif self.params['MODEL_CLASS'] == 'biGRUGRU':
-            self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True)
+            self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True, arch_size=self.params['ARCH_SIZE'])
         elif self.params['MODEL_CLASS'] == 'biGRUbiGRU':
-            self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True, dec_bi=True)
+            self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True, dec_bi=True, arch_size=self.params['ARCH_SIZE'])
         self.network.load_state_dict(self.current_state['model_state_dict'])
-        self.trained = True
+        if transfer:
+            self.trained = False
+            self.pre_trained = True
+        else:
+            self.trained = True
+            self.pre_trained = False
 
     def initiate(self, data):
         """
@@ -143,7 +152,7 @@ class PlastVAEGen():
         self.y_val = self.usable_lls[self.params['VAL_IDXS']]
 
         # Build network
-        if self.trained:
+        if self.trained or self.pre_trained:
             assert self.input_shape == self.current_state['input_shape'], "ERROR - Shape of data different than that used to train loaded model"
             assert self.latent_size == self.current_state['latent_size'], "ERROR - Latent space of trained model unequal to input parameter"
         else:
@@ -152,11 +161,11 @@ class PlastVAEGen():
             elif self.params['MODEL_CLASS'] == 'ConvbiGRU':
                 self.network = ConvGRU(self.input_shape, self.latent_size, dec_bi=True)
             elif self.params['MODEL_CLASS'] == 'GRUGRU':
-                self.network = GRUGRU(self.input_shape, self.latent_size)
+                self.network = GRUGRU(self.input_shape, self.latent_size, arch_size=self.params['ARCH_SIZE'])
             elif self.params['MODEL_CLASS'] == 'biGRUGRU':
-                self.network = GRUGRU(self.input_shape, self.latent_size, enc_bi=True)
+                self.network = GRUGRU(self.input_shape, self.latent_size, enc_bi=True, arch_size=self.params['ARCH_SIZE'])
             elif self.params['MODEL_CLASS'] == 'biGRUbiGRU':
-                self.network = GRUGRU(self.input_shape, self.latent_size, enc_bi=True, dec_bi=True)
+                self.network = GRUGRU(self.input_shape, self.latent_size, enc_bi=True, dec_bi=True, arch_size=self.params['ARCH_SIZE'])
 
         # Update state dictionaries
         self.current_state['input_shape'] = self.input_shape
@@ -248,7 +257,7 @@ class PlastVAEGen():
                                                  drop_last=True)
 
 
-        if self.trained:
+        if self.trained or self.pre_trained:
             self.optimizer = optim.Adam(self.network.parameters(), lr=self.lr)
             self.optimizer.load_state_dict(self.current_state['optimizer_state_dict'])
         else:

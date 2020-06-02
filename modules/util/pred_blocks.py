@@ -48,7 +48,8 @@ class GRUEncoder(nn.Module):
                  gru_layers=3,
                  gru_size=488,
                  drop_prob=0.,
-                 bi_direc=False):
+                 bi_direc=False,
+                 arch_size='small'):
         super().__init__()
 
         self.num_char = input_shape[0]
@@ -59,11 +60,21 @@ class GRUEncoder(nn.Module):
             self.num_directions = 2
         else:
             self.num_directions = 1
+        if arch_size == 'small':
+            kernel_size = 9
+        elif arch_size == 'large':
+            kernel_size = 9
         self.gru = nn.GRU(input_shape[0], gru_size, gru_layers, dropout=drop_prob, bidirectional=bi_direc)
-        self.conv1 = nn.Conv1d(self.num_directions*gru_size, self.num_directions*gru_size // 2, 9)
+        self.conv1 = nn.Conv1d(self.num_directions*gru_size, self.num_directions*gru_size // 2, kernel_size)
         self.maxpool1 = nn.MaxPool1d(2)
-        self.conv2 = nn.Conv1d(self.num_directions*gru_size // 2, gru_size // 4, 9)
-        self.conv3 = nn.Conv1d(gru_size // 4, 60, 9)
+        if arch_size == 'small':
+            self.conv2 = nn.Conv1d(self.num_directions*gru_size // 2, gru_size // 4, kernel_size)
+        elif arch_size == 'large':
+            self.conv2 = nn.Sequential(nn.Conv1d(self.num_directions*gru_size // 2, gru_size // 4, kernel_size), nn.MaxPool1d(4))
+        if arch_size == 'small':
+            self.conv3 = nn.Conv1d(gru_size // 4, 60, kernel_size)
+        elif arch_size == 'large':
+            self.conv3 = nn.Sequential(nn.Conv1d(gru_size // 4, 60, kernel_size), nn.MaxPool1d(4))
         self.z_means = nn.Linear(120, latent_size)
         self.z_var = nn.Linear(120, latent_size)
 
@@ -151,10 +162,11 @@ class GRUGRU(nn.Module):
                  input_shape,
                  latent_size,
                  enc_bi=False,
-                 dec_bi=False):
+                 dec_bi=False,
+                 arch_size='small'):
         super().__init__()
 
-        self.encoder = GRUEncoder(input_shape, latent_size, bi_direc=enc_bi)
+        self.encoder = GRUEncoder(input_shape, latent_size, bi_direc=enc_bi, arch_size=arch_size)
         self.decoder = GRUDecoder(input_shape, latent_size, bi_direc=dec_bi)
 
     def forward(self, x):
