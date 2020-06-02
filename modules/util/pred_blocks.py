@@ -45,6 +45,7 @@ class GRUEncoder(nn.Module):
     def __init__(self,
                  input_shape,
                  latent_size,
+                 embed_dim,
                  gru_layers=3,
                  gru_size=488,
                  drop_prob=0.,
@@ -54,6 +55,7 @@ class GRUEncoder(nn.Module):
 
         self.num_char = input_shape[0]
         self.max_len = input_shape[1]
+        self.embed_dim = embed_dim
         self.hidden_dim = gru_size
         self.n_layers = gru_layers
         if bi_direc:
@@ -64,7 +66,7 @@ class GRUEncoder(nn.Module):
             kernel_size = 9
         elif arch_size == 'large':
             kernel_size = 9
-        self.gru = nn.GRU(input_shape[0], gru_size, gru_layers, dropout=drop_prob, bidirectional=bi_direc)
+        self.gru = nn.GRU(embed_dim, gru_size, gru_layers, dropout=drop_prob, bidirectional=bi_direc)
         self.conv1 = nn.Conv1d(self.num_directions*gru_size, self.num_directions*gru_size // 2, kernel_size)
         self.maxpool1 = nn.MaxPool1d(2)
         if arch_size == 'small':
@@ -79,7 +81,7 @@ class GRUEncoder(nn.Module):
         self.z_var = nn.Linear(120, latent_size)
 
     def encode(self, x):
-        x = x.permute(2, 0, 1)
+        x = x.permute(1, 0, 2)
         x, h = self.gru(x)
         h = h.detach()
         x = x.permute(1, 2, 0)
@@ -161,15 +163,19 @@ class GRUGRU(nn.Module):
     def __init__(self,
                  input_shape,
                  latent_size,
+                 embed_dim,
                  enc_bi=False,
                  dec_bi=False,
                  arch_size='small'):
         super().__init__()
 
-        self.encoder = GRUEncoder(input_shape, latent_size, bi_direc=enc_bi, arch_size=arch_size)
+        self.embedding = nn.Embedding(input_shape[0], embed_dim)
+        self.encoder = GRUEncoder(input_shape, latent_size, embed_dim, bi_direc=enc_bi, arch_size=arch_size)
         self.decoder = GRUDecoder(input_shape, latent_size, bi_direc=dec_bi)
 
     def forward(self, x):
+        x = x.long()
+        x = self.embedding(x)
         z, mu, logvar = self.encoder(x)
         x_decode = self.decoder(z)
         return x_decode, mu, logvar

@@ -38,6 +38,14 @@ class PlastVAEGen():
             self.params['MODEL_CLASS'] = 'ConvGRU'
         if 'ARCH_SIZE' not in self.params.keys():
             self.params['ARCH_SIZE'] = 'small'
+        if 'NUM_CHAR' not in self.params.keys():
+            self.params['NUM_CHAR'] = 23
+        if 'EMBED_DIM' not in self.params.keys():
+            self.params['EMBED_DIM'] = 30
+        if 'CHAR_WEIGHTS' in self.params.keys():
+            self.params['CHAR_WEIGHTS'] = torch.tensor(self.params['CHAR_WEIGHTS'], dtype=torch.float)
+        else:
+            self.params['CHAR_WEIGHTS'] = torch.ones(self.params['NUM_CHAR'], dtype=torch.float)
         self.history = {'train_loss': [],
                         'val_loss': []}
         self.best_loss = np.inf
@@ -88,23 +96,23 @@ class PlastVAEGen():
         for k, v in self.current_state['params'].items():
             if k not in self.params.keys():
                 self.params[k] = v
-        if self.params['MODEL_CLASS'] == 'ConvGRU':
-            self.network = ConvGRU(self.current_state['input_shape'], self.current_state['latent_size'])
-        elif self.params['MODEL_CLASS'] == 'ConvbiGRU':
-            self.network = ConvGRU(self.current_state['input_shape'], self.current_state['latent_size'], dec_bi=True)
-        elif self.params['MODEL_CLASS'] == 'GRUGRU':
-            self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], arch_size=self.params['ARCH_SIZE'])
-        elif self.params['MODEL_CLASS'] == 'biGRUGRU':
-            self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True, arch_size=self.params['ARCH_SIZE'])
-        elif self.params['MODEL_CLASS'] == 'biGRUbiGRU':
-            self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True, dec_bi=True, arch_size=self.params['ARCH_SIZE'])
-        self.network.load_state_dict(self.current_state['model_state_dict'])
         if transfer:
             self.trained = False
             self.pre_trained = True
         else:
             self.trained = True
             self.pre_trained = False
+            if self.params['MODEL_CLASS'] == 'ConvGRU':
+                self.network = ConvGRU(self.current_state['input_shape'], self.current_state['latent_size'])
+            elif self.params['MODEL_CLASS'] == 'ConvbiGRU':
+                self.network = ConvGRU(self.current_state['input_shape'], self.current_state['latent_size'], dec_bi=True)
+            elif self.params['MODEL_CLASS'] == 'GRUGRU':
+                self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], arch_size=self.params['ARCH_SIZE'])
+            elif self.params['MODEL_CLASS'] == 'biGRUGRU':
+                self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True, arch_size=self.params['ARCH_SIZE'])
+            elif self.params['MODEL_CLASS'] == 'biGRUbiGRU':
+                self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True, dec_bi=True, arch_size=self.params['ARCH_SIZE'])
+            self.network.load_state_dict(self.current_state['model_state_dict'])
 
     def initiate(self, data):
         """
@@ -126,12 +134,12 @@ class PlastVAEGen():
         self.usable_data = [(ll, sm) for ll, sm in zip(self.all_lls, self.all_smiles) if len(sm) < self.params['MAX_LENGTH']]
         self.usable_lls = np.array([x[0] for x in self.usable_data])
         self.usable_smiles = [x[1] for x in self.usable_data]
-        self.params['CHAR_DICT'], self.params['ORD_DICT'] = uu.get_smiles_vocab(self.usable_smiles)
+        # self.params['CHAR_DICT'], self.params['ORD_DICT'] = uu.get_smiles_vocab(self.usable_smiles)
         self.params['NUM_CHAR'] = len(self.params['CHAR_DICT'])
         self.params['PAD_NUM'] = self.params['CHAR_DICT']['_']
-        self.encoded = torch.empty((len(self.usable_smiles), self.params['NUM_CHAR'], self.params['MAX_LENGTH']))
+        self.encoded = torch.empty((len(self.usable_smiles), self.params['MAX_LENGTH']))
         for i, sm in enumerate(self.usable_smiles):
-            self.encoded[i,:,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT']))
+            self.encoded[i,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT']))
         self.input_shape = (self.params['NUM_CHAR'], self.params['MAX_LENGTH'])
 
         # Data preparation
@@ -141,13 +149,13 @@ class PlastVAEGen():
         self.rand_idxs = np.random.choice(np.arange(self.params['N_SAMPLES']), size=self.params['N_SAMPLES'])
         self.params['TRAIN_IDXS'] = self.rand_idxs[:self.params['N_TRAIN']]
         self.params['VAL_IDXS'] = self.rand_idxs[self.params['N_TRAIN']:]
-        if self.weigh_freq:
-            self.params['CHAR_WEIGHTS'] = torch.tensor(uu.get_char_weights(np.array(self.usable_smiles)[self.params['TRAIN_IDXS']], self.params, self.params['FREQ_PENALTY']), dtype=torch.float)
-        else:
-            self.params['CHAR_WEIGHTS'] = torch.ones(self.params['NUM_CHAR'], dtype=torch.float)
+        # if self.weigh_freq:
+        #     self.params['CHAR_WEIGHTS'] = torch.tensor(uu.get_char_weights(np.array(self.usable_smiles)[self.params['TRAIN_IDXS']], self.params, self.params['FREQ_PENALTY']), dtype=torch.float)
+        # else:
+        #     self.params['CHAR_WEIGHTS'] = torch.ones(self.params['NUM_CHAR'], dtype=torch.float)
 
-        self.X_train = self.encoded[self.params['TRAIN_IDXS'],:,:]
-        self.X_val = self.encoded[self.params['VAL_IDXS'],:,:]
+        self.X_train = self.encoded[self.params['TRAIN_IDXS'],:]
+        self.X_val = self.encoded[self.params['VAL_IDXS'],:]
         self.y_train = self.usable_lls[self.params['TRAIN_IDXS']]
         self.y_val = self.usable_lls[self.params['VAL_IDXS']]
 
@@ -155,19 +163,19 @@ class PlastVAEGen():
         if self.trained:
             assert self.input_shape == self.current_state['input_shape'], "ERROR - Shape of data different than that used to train loaded model"
             assert self.latent_size == self.current_state['latent_size'], "ERROR - Latent space of trained model unequal to input parameter"
-        elif self.pre_trained:
-            pass
         else:
             if self.params['MODEL_CLASS'] == 'ConvGRU':
                 self.network = ConvGRU(self.input_shape, self.latent_size)
             elif self.params['MODEL_CLASS'] == 'ConvbiGRU':
                 self.network = ConvGRU(self.input_shape, self.latent_size, dec_bi=True)
             elif self.params['MODEL_CLASS'] == 'GRUGRU':
-                self.network = GRUGRU(self.input_shape, self.latent_size, arch_size=self.params['ARCH_SIZE'])
+                self.network = GRUGRU(self.input_shape, self.latent_size, embed_dim=self.params['EMBED_DIM'], arch_size=self.params['ARCH_SIZE'])
             elif self.params['MODEL_CLASS'] == 'biGRUGRU':
-                self.network = GRUGRU(self.input_shape, self.latent_size, enc_bi=True, arch_size=self.params['ARCH_SIZE'])
+                self.network = GRUGRU(self.input_shape, self.latent_size, embed_dim=self.params['EMBED_DIM'], enc_bi=True, arch_size=self.params['ARCH_SIZE'])
             elif self.params['MODEL_CLASS'] == 'biGRUbiGRU':
-                self.network = GRUGRU(self.input_shape, self.latent_size, enc_bi=True, dec_bi=True, arch_size=self.params['ARCH_SIZE'])
+                self.network = GRUGRU(self.input_shape, self.latent_size, embed_dim=self.params['EMBED_DIM'], enc_bi=True, dec_bi=True, arch_size=self.params['ARCH_SIZE'])
+        if self.pre_trained:
+            self.network.load_state_dict(self.current_state['model_state_dict'])
 
         # Update state dictionaries
         self.current_state['input_shape'] = self.input_shape
@@ -194,14 +202,14 @@ class PlastVAEGen():
         self.usable_data = [(ll, sm) for ll, sm in zip(self.all_lls, self.all_smiles) if len(sm) < self.params['MAX_LENGTH']]
         self.usable_lls = np.array([x[0] for x in self.usable_data])
         self.usable_smiles = [x[1] for x in self.usable_data]
-        self.encoded = torch.empty((len(self.usable_smiles), self.params['NUM_CHAR'], self.params['MAX_LENGTH']))
+        self.encoded = torch.empty((len(self.usable_smiles), self.params['MAX_LENGTH']))
         for i, sm in enumerate(self.usable_smiles):
-            self.encoded[i,:,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT']))
+            self.encoded[i,:] = torch.tensor(uu.encode_smiles(sm, self.params['MAX_LENGTH'], self.params['CHAR_DICT']))
         self.input_shape = (self.params['NUM_CHAR'], self.params['MAX_LENGTH'])
 
         # Data preparation
-        self.X_train = self.encoded[self.params['TRAIN_IDXS'],:,:]
-        self.X_val = self.encoded[self.params['VAL_IDXS'],:,:]
+        self.X_train = self.encoded[self.params['TRAIN_IDXS'],:]
+        self.X_val = self.encoded[self.params['VAL_IDXS'],:]
         self.y_train = self.usable_lls[self.params['TRAIN_IDXS']]
         self.y_val = self.usable_lls[self.params['VAL_IDXS']]
 

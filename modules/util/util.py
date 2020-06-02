@@ -55,7 +55,13 @@ def get_smiles_vocab(smiles, start_char=False):
     ord_dict[i+1] = '_'
     return char_dict, ord_dict
 
-def encode_smiles(smile, max_len, char_dict, one_hot=True):
+def encode_smiles(smile, max_len, char_dict):
+    for _ in range(max_len - len(smile)):
+        smile.append('_')
+    smile_vec = [char_dict[c] for c in smile]
+    return smile_vec
+
+def encode_smiles_noembed(smile, max_len, char_dict, one_hot=True):
     for _ in range(max_len - len(smile)):
         smile.append('_')
     smile_vec = [char_dict[c] for c in smile]
