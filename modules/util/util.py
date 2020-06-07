@@ -1,5 +1,6 @@
 import re
 import math
+import torch
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,6 +30,22 @@ def plot_grad_flow(named_parameters):
     plt.grid(True)
     plt.tight_layout()
     return plt
+
+# VAE Helper Functions
+def remap_checkpoint(fn, fo, new_name=None):
+    ckpt = torch.load(fn, map_location=torch.device('cpu'))
+    old_keys = ['encoder.conv2.weight', 'encoder.conv2.bias', 'encoder.conv3.weight', 'encoder.conv3.bias']
+    new_keys = ['encoder.conv2.0.weight', 'encoder.conv2.0.bias', 'encoder.conv3.0.weight', 'encoder.conv3.0.bias']
+    for ok, nk in zip(old_keys, new_keys):
+        ckpt['model_state_dict'][nk] = ckpt['model_state_dict'][ok]
+        ckpt['model_state_dict'].pop(ok)
+    decoder_weights = ckpt['model_state_dict']['decoder.dense.weight']
+    decoder_biases = ckpt['model_state_dict']['decoder.dense.bias']
+    ckpt['model_state_dict']['decoder.dense.weight'] = torch.tensor(np.tile(decoder_weights, (4, 1)), dtype=torch.float)
+    ckpt['model_state_dict']['decoder.dense.bias'] = torch.tensor(np.tile(decoder_biases, (4)), dtype=torch.float)
+    if new_name is not None:
+        ckpt['name'] = new_name
+    torch.save(ckpt, fo)
 
 # SMILES Helper Functions
 def smi_tokenizer(smile):

@@ -267,7 +267,7 @@ class PlastVAEGen():
                                                  drop_last=True)
 
 
-        if self.trained or self.pre_trained:
+        if self.trained:
             self.optimizer = optim.Adam(self.network.parameters(), lr=self.lr)
             self.optimizer.load_state_dict(self.current_state['optimizer_state_dict'])
         else:
