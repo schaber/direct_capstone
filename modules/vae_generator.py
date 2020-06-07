@@ -107,11 +107,11 @@ class PlastVAEGen():
             elif self.params['MODEL_CLASS'] == 'ConvbiGRU':
                 self.network = ConvGRU(self.current_state['input_shape'], self.current_state['latent_size'], dec_bi=True)
             elif self.params['MODEL_CLASS'] == 'GRUGRU':
-                self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], arch_size=self.params['ARCH_SIZE'])
+                self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], embed_dim=self.params['EMBED_DIM'],arch_size=self.params['ARCH_SIZE'])
             elif self.params['MODEL_CLASS'] == 'biGRUGRU':
-                self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True, arch_size=self.params['ARCH_SIZE'])
+                self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], embed_dim=self.params['EMBED_DIM'], enc_bi=True, arch_size=self.params['ARCH_SIZE'])
             elif self.params['MODEL_CLASS'] == 'biGRUbiGRU':
-                self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], enc_bi=True, dec_bi=True, arch_size=self.params['ARCH_SIZE'])
+                self.network = GRUGRU(self.current_state['input_shape'], self.current_state['latent_size'], embed_dim=self.params['EMBED_DIM'], enc_bi=True, dec_bi=True, arch_size=self.params['ARCH_SIZE'])
             self.network.load_state_dict(self.current_state['model_state_dict'])
 
     def initiate(self, data):
