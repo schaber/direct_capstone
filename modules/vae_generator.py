@@ -99,6 +99,8 @@ class PlastVAEGen():
         if transfer:
             self.trained = False
             self.pre_trained = True
+            self.n_pretrain_epochs = self.n_epochs
+            self.n_epochs = 0
         else:
             self.trained = True
             self.pre_trained = False
